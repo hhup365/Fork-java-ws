@@ -1,6 +1,6 @@
 <div align="center">
 
-# Python-ws
+# Java-ws
 这是一个基于 Java 实现的多协议代理服务器，支持 VLESS、Trojan 和 Shadowsocks 协议 over WebSocket，集成哪吒探针服务(v0或v1)，无需三方内核，资源占用更少。
 
 ---
@@ -51,3 +51,4 @@ function getRandomArray(array) {
 ```
 
 版权所有 ©2026 `eooce`
+
