@@ -9,8 +9,6 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 
 import java.io.*;
@@ -29,7 +27,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import io.github.cdimascio.dotenv.Dotenv;
 
 public class App {
     
@@ -39,7 +36,7 @@ public class App {
     private static String NEZHA_PORT;
     private static String NEZHA_KEY;
     
-    // 新增 KOMARI 变量
+    // KOMARI 变量
     private static String KOMARI_SERVER;
     private static String KOMARI_KEY;
     
@@ -74,18 +71,19 @@ public class App {
     private static final long DNS_CACHE_TTL = 300000;
     
     private static Process nezhaProcess = null;
-    private static Process komariProcess = null; // 新增 KOMARI 进程
-    private static String komariFileName = "";   // 新增 KOMARI 文件名
+    private static Process komariProcess = null;
+    private static String komariFileName = "";   
     
     // 日志级别控制
     private static boolean SILENT_MODE = true; 
     
     private static void log(String level, String msg) {
-        if (SILENT_MODE && !level.equals("INFO")) return;  
-        System.out.println(new Date() + " - " + level + " - " + msg);
+        if (SILENT_MODE && !level.equals("INFO") && !level.equals("FORCE")) return;  
+        System.out.println(new Date() + " - " + (level.equals("FORCE") ? "INFO" : level) + " - " + msg);
     }
     
     private static void info(String msg) { log("INFO", msg); }
+    private static void forceLog(String msg) { log("FORCE", msg); }
     private static void error(String msg) { log("ERROR", msg); }
     private static void error(String msg, Throwable t) { 
         log("ERROR", msg);
@@ -94,24 +92,41 @@ public class App {
     private static void debug(String msg) { if (DEBUG) log("DEBUG", msg); }
     
     private static void loadConfig() {
-        // 先尝试加载 .env 文件
         Map<String, String> envFromFile = new HashMap<>();
-        try {
-            Path envPath = Paths.get(".env");
-            if (Files.exists(envPath)) {
-                Dotenv dotenv = Dotenv.configure()
-                        .directory(".")
-                        .filename(".env")
-                        .ignoreIfMissing()
-                        .load();
-                
-                dotenv.entries().forEach(entry -> envFromFile.put(entry.getKey(), entry.getValue()));
-                // info("✅ .env file loaded: " + envFromFile.size() + " variables");
-            } else {
-                debug("No .env file found, using default environment variables");
+        
+        // 打印当前工作目录，方便用户排查.env文件应该放在哪里
+        forceLog("Current working directory: " + Paths.get("").toAbsolutePath().toString());
+        
+        // 纯原生 Java 解析 .env 文件，弃用第三方库防止找不到依赖导致静默崩溃
+        Path envPath = Paths.get(".env");
+        if (Files.exists(envPath)) {
+            forceLog("Found .env file, attempting to load...");
+            try {
+                List<String> lines = Files.readAllLines(envPath, StandardCharsets.UTF_8);
+                for (String line : lines) {
+                    line = line.trim();
+                    if (line.isEmpty() || line.startsWith("#")) continue;
+                    
+                    int equalsIdx = line.indexOf('=');
+                    if (equalsIdx > 0) {
+                        String key = line.substring(0, equalsIdx).trim();
+                        String value = line.substring(equalsIdx + 1).trim();
+                        // 去除首尾可能存在的引号
+                        if ((value.startsWith("\"") && value.endsWith("\"")) || 
+                            (value.startsWith("'") && value.endsWith("'"))) {
+                            if (value.length() >= 2) {
+                                value = value.substring(1, value.length() - 1);
+                            }
+                        }
+                        envFromFile.put(key, value);
+                    }
+                }
+                forceLog("✅ Successfully loaded " + envFromFile.size() + " variables from .env");
+            } catch (Exception e) {
+                forceLog("❌ Failed to parse .env file: " + e.getMessage());
             }
-        } catch (Exception e) {
-            debug("Failed to load .env file: " + e.getMessage());
+        } else {
+            forceLog("⚠️ No .env file found. Proceeding with system environment variables and defaults.");
         }
         
         // 默认值变量
@@ -120,7 +135,6 @@ public class App {
         NEZHA_PORT = getEnvValue(envFromFile, "NEZHA_PORT", "");
         NEZHA_KEY = getEnvValue(envFromFile, "NEZHA_KEY", "");
         
-        // 读取 KOMARI 环境变量
         KOMARI_SERVER = getEnvValue(envFromFile, "KOMARI_SERVER", "");
         KOMARI_KEY = getEnvValue(envFromFile, "KOMARI_KEY", "");
         
@@ -128,7 +142,6 @@ public class App {
         SUB_PATH = getEnvValue(envFromFile, "SUB_PATH", "sub");
         NAME = getEnvValue(envFromFile, "NAME", "");
         
-        // 处理WSPATH
         String wspathFromEnv = getEnvValue(envFromFile, "WSPATH", null);
         if (wspathFromEnv != null) {
             WSPATH = wspathFromEnv;
@@ -136,14 +149,12 @@ public class App {
             WSPATH = UUID.substring(0, 8);
         }
         
-        // 处理端口
         String portStr = getEnvValue(envFromFile, "SERVER_PORT", null);
         if (portStr == null) {
             portStr = getEnvValue(envFromFile, "PORT", "3000");
         }
         PORT = Integer.parseInt(portStr);
         
-        // 处理布尔值
         AUTO_ACCESS = Boolean.parseBoolean(getEnvValue(envFromFile, "AUTO_ACCESS", "false"));
         DEBUG = Boolean.parseBoolean(getEnvValue(envFromFile, "DEBUG", "false"));
         
@@ -152,10 +163,8 @@ public class App {
         currentDomain = DOMAIN;
         
         SILENT_MODE = !DEBUG;
-
     }
     
-    // 优先从.env获取环境变量，没有则使用默认值
     private static String getEnvValue(Map<String, String> envFromFile, String key, String defaultValue) {
         if (envFromFile.containsKey(key)) {
             return envFromFile.get(key);
@@ -164,7 +173,6 @@ public class App {
         if (sysEnv != null && !sysEnv.isEmpty()) {
             return sysEnv;
         }
-
         return defaultValue;
     }
     
@@ -230,7 +238,6 @@ public class App {
                     info("public IP: " + currentDomain);
                 }
             } catch (Exception e) {
-                error("Failed to get IP: " + e.getMessage());
                 currentDomain = "change-your-domain.com";
                 tls = "tls";
                 currentPort = 443;
@@ -256,7 +263,6 @@ public class App {
                 String ispName = extractJsonValue(body, "isp");
                 isp = countryCode + "-" + ispName;
                 isp = isp.replace(" ", "_");
-                // info("Got ISP info: " + isp);
                 return;
             }
         } catch (Exception e) {
@@ -292,7 +298,7 @@ public class App {
         return "";
     }
     
-    // --- 新增: 生成随机文件名 ---
+    // 生成随机文件名
     private static String generateRandomName(String suffix) {
         String chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         StringBuilder result = new StringBuilder();
@@ -303,9 +309,10 @@ public class App {
         return result.toString() + suffix;
     }
 
-    // --- 新增: 启动 KOMARI 逻辑 ---
+    // 启动 KOMARI 探针
     private static void startKomari() {
         if (KOMARI_SERVER == null || KOMARI_SERVER.isEmpty() || KOMARI_KEY == null || KOMARI_KEY.isEmpty()) {
+            forceLog("⚠️ KOMARI_SERVER or KOMARI_KEY is missing, skipping komari initialization.");
             return;
         }
         
@@ -339,7 +346,7 @@ public class App {
             pb.redirectErrorStream(true);
             komariProcess = pb.start();
             
-            info("✅ komari service ready");
+            forceLog("✅ komari service initialized successfully.");
             
             // 阅后即焚，180秒后清理文件
             new Timer().schedule(new TimerTask() {
@@ -348,11 +355,11 @@ public class App {
             }, 180000);
             
         } catch (IOException e) {
-            error("Error running komari: " + e.getMessage());
+            forceLog("❌ Error running komari: " + e.getMessage());
         }
     }
     
-    // --- 新增: 下载 KOMARI 逻辑 ---
+    // 下载 KOMARI
     private static void downloadKomari() {
         String arch = System.getProperty("os.arch").toLowerCase();
         String url;
@@ -374,15 +381,16 @@ public class App {
                 debug("✅ komari downloaded successfully as " + komariFileName);
             }
         } catch (Exception e) {
-            error("Komari download failed: " + e.getMessage());
+            forceLog("❌ Komari download failed: " + e.getMessage());
         }
     }
     
-    // --- 新增: 清理 KOMARI 逻辑 ---
+    // 清理 KOMARI
     private static void cleanupKomari() {
         if (komariFileName != null && !komariFileName.isEmpty()) {
             try {
                 Files.deleteIfExists(Paths.get(komariFileName));
+                debug("✅ komari executable cleaned up.");
             } catch (IOException e) {}
         }
     }
@@ -452,7 +460,6 @@ public class App {
         }
         
         try {
-            // info("Downloading npm from: " + url);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(30))
@@ -597,7 +604,6 @@ public class App {
         }
         
         private String getIndexHtml() {
-            // 尝试从 classpath 读取
             try (InputStream is = getClass().getClassLoader().getResourceAsStream("static/index.html")) {
                 if (is != null) {
                     return new String(is.readAllBytes(), StandardCharsets.UTF_8);
@@ -605,8 +611,6 @@ public class App {
             } catch (IOException e) {
                 debug("Failed to read index.html from classpath: " + e.getMessage());
             }
-            
-            // 尝试从文件系统读取
             try {
                 Path path = Paths.get("index.html");
                 if (Files.exists(path)) {
@@ -615,8 +619,6 @@ public class App {
             } catch (IOException e) {
                 debug("Failed to read index.html from filesystem: " + e.getMessage());
             }
-            
-            // 返回默认内容
             return "<!DOCTYPE html><html><head><title>Hello world!</title></head>" +
                    "<body><h4>Hello world!</h4></body></html>";
         }
@@ -650,7 +652,6 @@ public class App {
         }
         
         private void handleFirstMessage(ChannelHandlerContext ctx, byte[] data) {
-            // 检查VLESS (以0x00开头)
             if (data.length > 18 && data[0] == 0x00) {
                 boolean uuidMatch = true;
                 for (int i = 0; i < 16; i++) {
@@ -667,7 +668,6 @@ public class App {
                 }
             }
             
-            // 检查Trojan (以SHA224哈希开头)
             if (data.length >= 56) {
                 byte[] hashBytes = Arrays.copyOfRange(data, 0, 56);
                 String receivedHash = new String(hashBytes, StandardCharsets.US_ASCII);
@@ -682,7 +682,6 @@ public class App {
                 }
             }
             
-            // 检查Shadowsocks
             if (data.length > 2 && (data[0] == 0x01 || data[0] == 0x03)) {
                 if (handleShadowsocks(ctx, data)) {
                     protocolIdentified = true;
@@ -697,43 +696,31 @@ public class App {
             try {
                 int addonsLength = data[17] & 0xFF;
                 int offset = 18 + addonsLength;
-                
                 if (offset + 1 > data.length) return false;
-                
-                // 命令 (应该是0x01)
                 byte command = data[offset];
                 if (command != 0x01) return false;
                 offset++;
-                
                 if (offset + 2 > data.length) return false;
-                
-                // 端口
                 int port = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
                 offset += 2;
-                
                 if (offset >= data.length) return false;
-                
-                // 地址类型
                 byte atyp = data[offset];
                 offset++;
-                
                 String host;
                 int addressLength;
                 
-                if (atyp == 0x01) { // IPv4
+                if (atyp == 0x01) {
                     if (offset + 4 > data.length) return false;
-                    host = String.format("%d.%d.%d.%d",
-                            data[offset] & 0xFF, data[offset + 1] & 0xFF,
-                            data[offset + 2] & 0xFF, data[offset + 3] & 0xFF);
+                    host = String.format("%d.%d.%d.%d", data[offset] & 0xFF, data[offset + 1] & 0xFF, data[offset + 2] & 0xFF, data[offset + 3] & 0xFF);
                     addressLength = 4;
-                } else if (atyp == 0x02) { // 域名
+                } else if (atyp == 0x02) {
                     if (offset >= data.length) return false;
                     int hostLen = data[offset] & 0xFF;
                     offset++;
                     if (offset + hostLen > data.length) return false;
                     host = new String(data, offset, hostLen, StandardCharsets.UTF_8);
                     addressLength = hostLen;
-                } else if (atyp == 0x03) { // IPv6
+                } else if (atyp == 0x03) {
                     if (offset + 16 > data.length) return false;
                     StringBuilder sb = new StringBuilder();
                     for (int i = 0; i < 16; i += 2) {
@@ -747,13 +734,10 @@ public class App {
                 }
                 
                 offset += addressLength;
-                
                 if (isBlockedDomain(host)) {
                     ctx.close();
                     return false;
                 }
-                
-                // 发送响应
                 ctx.writeAndFlush(new BinaryWebSocketFrame(Unpooled.wrappedBuffer(new byte[]{0x00, 0x00})));
                 
                 final byte[] remainingData;
@@ -762,7 +746,6 @@ public class App {
                 } else {
                     remainingData = new byte[0];
                 }
-                
                 connectToTarget(ctx, host, port, remainingData);
                 return true;
                 
@@ -774,41 +757,28 @@ public class App {
         private boolean handleTrojan(ChannelHandlerContext ctx, byte[] data) {
             try {
                 int offset = 56;
-                
-                // 跳过CRLF
-                while (offset < data.length && (data[offset] == '\r' || data[offset] == '\n')) {
-                    offset++;
-                }
-                
+                while (offset < data.length && (data[offset] == '\r' || data[offset] == '\n')) offset++;
                 if (offset >= data.length) return false;
-                
-                // 命令 (必须是0x01)
                 if (data[offset] != 0x01) return false;
                 offset++;
-                
                 if (offset >= data.length) return false;
-                
-                // 地址类型
                 byte atyp = data[offset];
                 offset++;
-                
                 String host;
                 int addressLength;
                 
-                if (atyp == 0x01) { // IPv4
+                if (atyp == 0x01) {
                     if (offset + 4 > data.length) return false;
-                    host = String.format("%d.%d.%d.%d",
-                            data[offset] & 0xFF, data[offset + 1] & 0xFF,
-                            data[offset + 2] & 0xFF, data[offset + 3] & 0xFF);
+                    host = String.format("%d.%d.%d.%d", data[offset] & 0xFF, data[offset + 1] & 0xFF, data[offset + 2] & 0xFF, data[offset + 3] & 0xFF);
                     addressLength = 4;
-                } else if (atyp == 0x03) { // 域名
+                } else if (atyp == 0x03) {
                     if (offset >= data.length) return false;
                     int hostLen = data[offset] & 0xFF;
                     offset++;
                     if (offset + hostLen > data.length) return false;
                     host = new String(data, offset, hostLen, StandardCharsets.UTF_8);
                     addressLength = hostLen;
-                } else if (atyp == 0x04) { // IPv6
+                } else if (atyp == 0x04) {
                     if (offset + 16 > data.length) return false;
                     StringBuilder sb = new StringBuilder();
                     for (int i = 0; i < 16; i += 2) {
@@ -822,17 +792,10 @@ public class App {
                 }
                 
                 offset += addressLength;
-                
                 if (offset + 2 > data.length) return false;
-                
                 int port = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
                 offset += 2;
-                
-                // 跳过可能的CRLF
-                while (offset < data.length && (data[offset] == '\r' || data[offset] == '\n')) {
-                    offset++;
-                }
-                
+                while (offset < data.length && (data[offset] == '\r' || data[offset] == '\n')) offset++;
                 if (isBlockedDomain(host)) {
                     ctx.close();
                     return false;
@@ -844,7 +807,6 @@ public class App {
                 } else {
                     remainingData = new byte[0];
                 }
-                
                 connectToTarget(ctx, host, port, remainingData);
                 return true;
                 
@@ -858,24 +820,21 @@ public class App {
                 int offset = 0;
                 byte atyp = data[offset];
                 offset++;
-                
                 String host;
                 int addressLength;
                 
-                if (atyp == 0x01) { // IPv4
+                if (atyp == 0x01) {
                     if (offset + 4 > data.length) return false;
-                    host = String.format("%d.%d.%d.%d",
-                            data[offset] & 0xFF, data[offset + 1] & 0xFF,
-                            data[offset + 2] & 0xFF, data[offset + 3] & 0xFF);
+                    host = String.format("%d.%d.%d.%d", data[offset] & 0xFF, data[offset + 1] & 0xFF, data[offset + 2] & 0xFF, data[offset + 3] & 0xFF);
                     addressLength = 4;
-                } else if (atyp == 0x03) { // 域名
+                } else if (atyp == 0x03) {
                     if (offset >= data.length) return false;
                     int hostLen = data[offset] & 0xFF;
                     offset++;
                     if (offset + hostLen > data.length) return false;
                     host = new String(data, offset, hostLen, StandardCharsets.UTF_8);
                     addressLength = hostLen;
-                } else if (atyp == 0x04) { // IPv6
+                } else if (atyp == 0x04) {
                     if (offset + 16 > data.length) return false;
                     StringBuilder sb = new StringBuilder();
                     for (int i = 0; i < 16; i += 2) {
@@ -889,12 +848,9 @@ public class App {
                 }
                 
                 offset += addressLength;
-                
                 if (offset + 2 > data.length) return false;
-                
                 int port = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
                 offset += 2;
-                
                 if (isBlockedDomain(host)) {
                     ctx.close();
                     return false;
@@ -906,7 +862,6 @@ public class App {
                 } else {
                     remainingData = new byte[0];
                 }
-                
                 connectToTarget(ctx, host, port, remainingData);
                 return true;
                 
@@ -915,12 +870,9 @@ public class App {
             }
         }
         
-        private void connectToTarget(ChannelHandlerContext ctx, String host, int port, 
-                                     byte[] remainingData) {
+        private void connectToTarget(ChannelHandlerContext ctx, String host, int port, byte[] remainingData) {
             String resolvedHost = resolveHost(host);
-            
             final byte[] dataToSend = remainingData;
-            
             Bootstrap b = new Bootstrap();
             b.group(ctx.channel().eventLoop())
                     .channel(ctx.channel().getClass())
@@ -936,7 +888,6 @@ public class App {
             
             ChannelFuture f = b.connect(resolvedHost, port);
             outboundChannel = f.channel();
-            
             f.addListener((ChannelFutureListener) future -> {
                 if (future.isSuccess()) {
                     connected = true;
@@ -973,7 +924,6 @@ public class App {
             if (remainingData != null && remainingData.length > 0) {
                 ctx.writeAndFlush(Unpooled.wrappedBuffer(remainingData));
             }
-            
             ctx.channel().config().setAutoRead(true);
             inboundChannel.config().setAutoRead(true);
         }
@@ -984,7 +934,6 @@ public class App {
                 ByteBuf buf = (ByteBuf) msg;
                 byte[] data = new byte[buf.readableBytes()];
                 buf.readBytes(data);
-                
                 if (inboundChannel.isActive()) {
                     inboundChannel.writeAndFlush(new BinaryWebSocketFrame(Unpooled.wrappedBuffer(data)));
                 }
@@ -1029,14 +978,15 @@ public class App {
     }
     
     public static void main(String[] args) {
+        // 先加载配置
         loadConfig();
         
-        info("Starting Server...");
-        info("Subscription Path: /" + SUB_PATH);
+        forceLog("Starting Server...");
+        forceLog("Subscription Path: /" + SUB_PATH);
         
         getIp();
         startNezha();
-        startKomari(); // 启动 KOMARI 探针
+        startKomari(); 
         addAccessTask();
         
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
@@ -1050,7 +1000,6 @@ public class App {
                         @Override
                         protected void initChannel(SocketChannel ch) {
                             ChannelPipeline p = ch.pipeline();
-                            
                             p.addLast(new IdleStateHandler(30, 0, 0));
                             p.addLast(new HttpServerCodec());
                             p.addLast(new HttpObjectAggregator(65536));
@@ -1067,7 +1016,7 @@ public class App {
             int actualPort = findAvailablePort(PORT);
             Channel ch = b.bind(actualPort).sync().channel();
             
-            info("✅ server is running on port " + actualPort);
+            forceLog("✅ server is running on port " + actualPort);
             
             ch.closeFuture().sync();
             
@@ -1084,7 +1033,6 @@ public class App {
             }
             cleanupNezha();
             
-            // 退出时销毁 komari 进程并清理残余
             if (komariProcess != null && komariProcess.isAlive()) {
                 komariProcess.destroy();
             }
@@ -1093,5 +1041,4 @@ public class App {
             info("Server stopped");
         }
     }
-
 }
