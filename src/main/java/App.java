@@ -38,6 +38,8 @@ public class App {
     private static String NEZHA_SERVER;
     private static String NEZHA_PORT;
     private static String NEZHA_KEY;
+    private static String KOMARI_SERVER;
+    private static String KOMARI_KEY;
     private static String DOMAIN;
     private static String SUB_PATH;
     private static String NAME;
@@ -69,6 +71,7 @@ public class App {
     private static final long DNS_CACHE_TTL = 300000;
     
     private static Process nezhaProcess = null;
+    private static Process komariProcess = null;
     
     // 日志级别控制
     private static boolean SILENT_MODE = true; 
@@ -112,6 +115,8 @@ public class App {
         NEZHA_SERVER = getEnvValue(envFromFile, "NEZHA_SERVER", "");
         NEZHA_PORT = getEnvValue(envFromFile, "NEZHA_PORT", "");
         NEZHA_KEY = getEnvValue(envFromFile, "NEZHA_KEY", "");
+        KOMARI_SERVER = getEnvValue(envFromFile, "KOMARI_SERVER", "");
+        KOMARI_KEY = getEnvValue(envFromFile, "KOMARI_KEY", "");
         DOMAIN = getEnvValue(envFromFile, "DOMAIN", "");
         SUB_PATH = getEnvValue(envFromFile, "SUB_PATH", "sub");
         NAME = getEnvValue(envFromFile, "NAME", "");
@@ -413,6 +418,93 @@ public class App {
         }
     }
     
+    // --- 新增: Komari 探针支持 ---
+    private static void startKomari() {
+        if (KOMARI_SERVER.isEmpty() || KOMARI_KEY.isEmpty()) return;
+        
+        try {
+            Process proc = Runtime.getRuntime().exec("ps aux");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+            String line;
+            boolean running = false;
+            while ((line = reader.readLine()) != null) {
+                if (line.contains("./km") && !line.contains("grep")) {
+                    running = true;
+                    break;
+                }
+            }
+            if (running) {
+                info("km is already running, skip...");
+                return;
+            }
+        } catch (IOException e) {
+            debug("Failed to check km process: " + e.getMessage());
+        }
+        
+        downloadKomari();
+        String command = buildKomariCommand();
+        if (command.isEmpty()) return;
+        
+        try {
+            ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", command);
+            pb.redirectErrorStream(true);
+            komariProcess = pb.start();
+            
+            Thread outputThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(komariProcess.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (DEBUG) debug("[Komari] " + line);
+                    }
+                } catch (IOException e) {}
+            });
+            outputThread.setDaemon(true);
+            outputThread.start();
+            
+            info("✅ km started successfully");
+            
+        } catch (IOException e) {
+            error("Error running km: " + e.getMessage());
+        }
+    }
+    
+    private static void downloadKomari() {
+        Path kmPath = Paths.get("km");
+        if (Files.exists(kmPath)) {
+            return; // 存在即复用
+        }
+        
+        String arch = System.getProperty("os.arch").toLowerCase();
+        String url;
+        if (arch.contains("arm") || arch.contains("aarch64")) {
+            url = "https://rt.jp.eu.org/nucleusp/K/Karm";
+        } else {
+            url = "https://rt.jp.eu.org/nucleusp/K/Kamd";
+        }
+        
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(30))
+                    .build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() == 200) {
+                Files.write(kmPath, response.body());
+                Runtime.getRuntime().exec("chmod 755 km");
+                info("✅ km downloaded successfully");
+            }
+        } catch (Exception e) {
+            error("Komari Download failed: " + e.getMessage());
+        }
+    }
+    
+    private static String buildKomariCommand() {
+        String server = KOMARI_SERVER.startsWith("http") ? KOMARI_SERVER : "https://" + KOMARI_SERVER;
+        return String.format("nohup ./km -e %s -t %s >/dev/null 2>&1 &", server, KOMARI_KEY);
+    }
+    // ----------------------------
+
     private static void addAccessTask() {
         if (!AUTO_ACCESS || DOMAIN.isEmpty()) return;
         
@@ -929,6 +1021,7 @@ public class App {
         
         getIp();
         startNezha();
+        startKomari();
         addAccessTask();
         
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
@@ -974,10 +1067,12 @@ public class App {
             if (nezhaProcess != null && nezhaProcess.isAlive()) {
                 nezhaProcess.destroy();
             }
+            if (komariProcess != null && komariProcess.isAlive()) {
+                komariProcess.destroy();
+            }
             cleanupNezha();
             info("Server stopped");
         }
     }
 
 }
-
