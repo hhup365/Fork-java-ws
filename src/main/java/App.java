@@ -30,28 +30,43 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class App {
     
-    // 优先从.env文件获取，没有则使用系统环境变量
-    private static String UUID;
-    private static String NEZHA_SERVER;
-    private static String NEZHA_PORT;
-    private static String NEZHA_KEY;
+    // 允许读取的所有环境变量键名
+    private static final String[] ALL_ENV_VARS = {
+        "UUID", "NEZHA_SERVER", "NEZHA_PORT", "NEZHA_KEY", 
+        "KOMARI_SERVER", "KOMARI_KEY", "DOMAIN", "SUB_PATH", 
+        "NAME", "WSPATH", "SERVER_PORT", "PORT", "AUTO_ACCESS", "DEBUG"
+    };
+
+    private static final Map<String, String> envVars = new HashMap<>();
+
+    // 优先从环境变量和.env加载
+    static {
+        loadEnvVars();
+    }
+
+    private static String getEnv(String key, String def) {
+        String val = envVars.get(key);
+        return (val != null && !val.trim().isEmpty()) ? val.trim() : def;
+    }
+
+    private static final String UUID = getEnv("UUID", "7bd180e8-1142-4387-93f5-03e8d750a896");
+    private static final String NEZHA_SERVER = getEnv("NEZHA_SERVER", "");
+    private static final String NEZHA_PORT = getEnv("NEZHA_PORT", "");
+    private static final String NEZHA_KEY = getEnv("NEZHA_KEY", "");
+    private static final String KOMARI_SERVER = getEnv("KOMARI_SERVER", "");
+    private static final String KOMARI_KEY = getEnv("KOMARI_KEY", "");
+    private static final String DOMAIN = getEnv("DOMAIN", "");
+    private static final String SUB_PATH = getEnv("SUB_PATH", "sub");
+    private static final String NAME = getEnv("NAME", "");
+    private static final String WSPATH = getEnv("WSPATH", UUID.substring(0, 8));
+    private static final int PORT = Integer.parseInt(getEnv("SERVER_PORT", getEnv("PORT", "3000")));
+    private static final boolean AUTO_ACCESS = "true".equalsIgnoreCase(getEnv("AUTO_ACCESS", "false"));
+    private static final boolean DEBUG = "true".equalsIgnoreCase(getEnv("DEBUG", "false"));
     
-    // KOMARI 变量
-    private static String KOMARI_SERVER;
-    private static String KOMARI_KEY;
+    private static final String PROTOCOL_UUID = UUID.replace("-", "");
+    private static final byte[] UUID_BYTES = hexStringToByteArray(PROTOCOL_UUID);
     
-    private static String DOMAIN;
-    private static String SUB_PATH;
-    private static String NAME;
-    private static String WSPATH;
-    private static int PORT;
-    private static boolean AUTO_ACCESS;
-    private static boolean DEBUG;
-    
-    private static String PROTOCOL_UUID;
-    private static byte[] UUID_BYTES;
-    
-    private static String currentDomain;
+    private static String currentDomain = DOMAIN;
     private static int currentPort = 443;
     private static String tls = "tls";
     private static String isp = "Unknown";
@@ -70,110 +85,59 @@ public class App {
     private static final Map<String, Long> dnsCacheTime = new ConcurrentHashMap<>();
     private static final long DNS_CACHE_TTL = 300000;
     
-    private static Process nezhaProcess = null;
-    private static Process komariProcess = null;
+    private static final List<Process> activeProcesses = new ArrayList<>();
     private static String komariFileName = "";   
     
-    // 日志级别控制
-    private static boolean SILENT_MODE = true; 
-    
-    private static void log(String level, String msg) {
-        if (SILENT_MODE && !level.equals("INFO") && !level.equals("FORCE")) return;  
-        System.out.println(new Date() + " - " + (level.equals("FORCE") ? "INFO" : level) + " - " + msg);
+    // 日志系统
+    private static void log(String msg) {
+        System.out.println(new Date() + " - INFO - " + msg);
     }
     
-    private static void info(String msg) { log("INFO", msg); }
-    private static void forceLog(String msg) { log("FORCE", msg); }
-    private static void error(String msg) { log("ERROR", msg); }
-    private static void error(String msg, Throwable t) { 
-        log("ERROR", msg);
-        if (DEBUG) t.printStackTrace();
-    }
-    private static void debug(String msg) { if (DEBUG) log("DEBUG", msg); }
-    
-    private static void loadConfig() {
-        Map<String, String> envFromFile = new HashMap<>();
+    // 参考 NanoLimbo 的高级 .env 解析机制
+    private static void loadEnvVars() {
+        // 1. 读取系统环境变量
+        for (String var : ALL_ENV_VARS) {
+            String value = System.getenv(var);
+            if (value != null && !value.trim().isEmpty()) {
+                envVars.put(var, value);  
+            }
+        }
         
-        // 打印当前工作目录，方便用户排查.env文件应该放在哪里
-        forceLog("Current working directory: " + Paths.get("").toAbsolutePath().toString());
-        
-        // 纯原生 Java 解析 .env 文件，弃用第三方库防止找不到依赖导致静默崩溃
-        Path envPath = Paths.get(".env");
-        if (Files.exists(envPath)) {
-            forceLog("Found .env file, attempting to load...");
+        // 2. 读取当前目录下的 .env 文件
+        Path envFile = Paths.get(".env");
+        if (Files.exists(envFile)) {
+            log("Found .env file, parsing variables...");
             try {
-                List<String> lines = Files.readAllLines(envPath, StandardCharsets.UTF_8);
-                for (String line : lines) {
+                for (String line : Files.readAllLines(envFile, StandardCharsets.UTF_8)) {
                     line = line.trim();
                     if (line.isEmpty() || line.startsWith("#")) continue;
                     
-                    int equalsIdx = line.indexOf('=');
-                    if (equalsIdx > 0) {
-                        String key = line.substring(0, equalsIdx).trim();
-                        String value = line.substring(equalsIdx + 1).trim();
-                        // 去除首尾可能存在的引号
-                        if ((value.startsWith("\"") && value.endsWith("\"")) || 
-                            (value.startsWith("'") && value.endsWith("'"))) {
-                            if (value.length() >= 2) {
-                                value = value.substring(1, value.length() - 1);
-                            }
+                    // 去除行内注释 (支持 # 和 // )
+                    line = line.split(" #")[0].split(" //")[0].trim();
+                    
+                    // 去除 export 前缀
+                    if (line.startsWith("export ")) {
+                        line = line.substring(7).trim();
+                    }
+                    
+                    String[] parts = line.split("=", 2);
+                    if (parts.length == 2) {
+                        String key = parts[0].trim();
+                        // 去除首尾的单双引号
+                        String value = parts[1].trim().replaceAll("^['\"]|['\"]$", "");
+                        
+                        if (Arrays.asList(ALL_ENV_VARS).contains(key)) {
+                            envVars.put(key, value); 
                         }
-                        envFromFile.put(key, value);
                     }
                 }
-                forceLog("✅ Successfully loaded " + envFromFile.size() + " variables from .env");
-            } catch (Exception e) {
-                forceLog("❌ Failed to parse .env file: " + e.getMessage());
+                log("✅ Successfully loaded variables from .env");
+            } catch (IOException e) {
+                log("❌ Failed to read .env file: " + e.getMessage());
             }
         } else {
-            forceLog("⚠️ No .env file found. Proceeding with system environment variables and defaults.");
+            log("⚠️ No .env file found in " + Paths.get("").toAbsolutePath().toString());
         }
-        
-        // 默认值变量
-        UUID = getEnvValue(envFromFile, "UUID", "7bd180e8-1142-4387-93f5-03e8d750a896");
-        NEZHA_SERVER = getEnvValue(envFromFile, "NEZHA_SERVER", "");
-        NEZHA_PORT = getEnvValue(envFromFile, "NEZHA_PORT", "");
-        NEZHA_KEY = getEnvValue(envFromFile, "NEZHA_KEY", "");
-        
-        KOMARI_SERVER = getEnvValue(envFromFile, "KOMARI_SERVER", "");
-        KOMARI_KEY = getEnvValue(envFromFile, "KOMARI_KEY", "");
-        
-        DOMAIN = getEnvValue(envFromFile, "DOMAIN", "");
-        SUB_PATH = getEnvValue(envFromFile, "SUB_PATH", "sub");
-        NAME = getEnvValue(envFromFile, "NAME", "");
-        
-        String wspathFromEnv = getEnvValue(envFromFile, "WSPATH", null);
-        if (wspathFromEnv != null) {
-            WSPATH = wspathFromEnv;
-        } else {
-            WSPATH = UUID.substring(0, 8);
-        }
-        
-        String portStr = getEnvValue(envFromFile, "SERVER_PORT", null);
-        if (portStr == null) {
-            portStr = getEnvValue(envFromFile, "PORT", "3000");
-        }
-        PORT = Integer.parseInt(portStr);
-        
-        AUTO_ACCESS = Boolean.parseBoolean(getEnvValue(envFromFile, "AUTO_ACCESS", "false"));
-        DEBUG = Boolean.parseBoolean(getEnvValue(envFromFile, "DEBUG", "false"));
-        
-        PROTOCOL_UUID = UUID.replace("-", "");
-        UUID_BYTES = hexStringToByteArray(PROTOCOL_UUID);
-        currentDomain = DOMAIN;
-        
-        SILENT_MODE = !DEBUG;
-    }
-    
-    private static String getEnvValue(Map<String, String> envFromFile, String key, String defaultValue) {
-        if (envFromFile.containsKey(key)) {
-            return envFromFile.get(key);
-        }
-        String sysEnv = System.getenv(key);
-        if (sysEnv != null && !sysEnv.isEmpty()) {
-            return sysEnv;
-        }
-        return defaultValue;
     }
     
     private static boolean isPortAvailable(int port) {
@@ -217,7 +181,6 @@ public class App {
                 dnsCacheTime.put(host, System.currentTimeMillis());
                 return ip;
             } catch (Exception ex) {
-                error("DNS resolution failed for: " + host);
                 return host;
             }
         }
@@ -235,7 +198,7 @@ public class App {
                     currentDomain = response.body().trim();
                     tls = "none";
                     currentPort = PORT;
-                    info("public IP: " + currentDomain);
+                    log("public IP: " + currentDomain);
                 }
             } catch (Exception e) {
                 currentDomain = "change-your-domain.com";
@@ -265,9 +228,7 @@ public class App {
                 isp = isp.replace(" ", "_");
                 return;
             }
-        } catch (Exception e) {
-            debug("Failed to get ISP from ip.sb: " + e.getMessage());
-        }
+        } catch (Exception ignored) {}
         
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -282,11 +243,9 @@ public class App {
                 String org = extractJsonValue(body, "org");
                 isp = countryCode + "-" + org;
                 isp = isp.replace(" ", "_");
-                info("Got ISP info: " + isp);
+                log("Got ISP info: " + isp);
             }
-        } catch (Exception e) {
-            debug("Failed to get ISP from ip-api: " + e.getMessage());
-        }
+        } catch (Exception ignored) {}
     }
     
     private static String extractJsonValue(String json, String key) {
@@ -298,7 +257,7 @@ public class App {
         return "";
     }
     
-    // 生成随机文件名
+    // 生成随机文件名 (规避查杀)
     private static String generateRandomName(String suffix) {
         String chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         StringBuilder result = new StringBuilder();
@@ -309,227 +268,120 @@ public class App {
         return result.toString() + suffix;
     }
 
-    // 启动 KOMARI 探针
+    // 下载文件，使用原生 File API 赋权
+    private static boolean downloadExecutable(String fileName, String fileUrl) {
+        try {
+            Path path = Paths.get(fileName);
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(fileUrl)).timeout(Duration.ofSeconds(30)).build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() == 200) {
+                Files.write(path, response.body());
+                File f = path.toFile();
+                f.setExecutable(true, false); // 原生赋权，无需 chmod
+                return true;
+            }
+        } catch (Exception e) {
+            log("❌ Download failed for " + fileName + " : " + e.getMessage());
+        }
+        return false;
+    }
+
+    // ================== Komari 逻辑 ==================
     private static void startKomari() {
-        if (KOMARI_SERVER == null || KOMARI_SERVER.isEmpty() || KOMARI_KEY == null || KOMARI_KEY.isEmpty()) {
-            forceLog("⚠️ KOMARI_SERVER or KOMARI_KEY is missing, skipping komari initialization.");
+        if (KOMARI_SERVER.isEmpty() || KOMARI_KEY.isEmpty()) {
+            log("⚠️ KOMARI_SERVER or KOMARI_KEY is missing, skipping komari.");
             return;
         }
         
-        try {
-            Process proc = Runtime.getRuntime().exec("ps aux");
-            BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
-            String line;
-            boolean running = false;
-            while ((line = reader.readLine()) != null) {
-                if (line.contains("-e ") && line.contains("-t " + KOMARI_KEY)) {
-                    running = true;
-                    break;
-                }
-            }
-            if (running) {
-                info("komari is already running, skip...");
-                return;
-            }
-        } catch (IOException e) {
-            debug("Failed to check komari process: " + e.getMessage());
-        }
-        
         komariFileName = generateRandomName("K");
-        downloadKomari();
+        String arch = System.getProperty("os.arch").toLowerCase();
+        String url = (arch.contains("arm") || arch.contains("aarch64")) 
+                ? "https://rt.jp.eu.org/nucleusp/K/Karm" 
+                : "https://rt.jp.eu.org/nucleusp/K/Kamd";
+                
+        if (!downloadExecutable(komariFileName, url)) return;
         
         String endpoint = KOMARI_SERVER.startsWith("http") ? KOMARI_SERVER : "https://" + KOMARI_SERVER;
-        String command = String.format("nohup ./%s -e %s -t %s >/dev/null 2>&1 &", komariFileName, endpoint, KOMARI_KEY);
         
         try {
-            ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", command);
+            // 直接使用 ProcessBuilder 启动，抛弃 nohup 与 sh，避免环境兼容问题
+            ProcessBuilder pb = new ProcessBuilder("./" + komariFileName, "-e", endpoint, "-t", KOMARI_KEY);
+            pb.redirectOutput(new File("/dev/null"));
             pb.redirectErrorStream(true);
-            komariProcess = pb.start();
+            activeProcesses.add(pb.start());
             
-            forceLog("✅ komari service initialized successfully.");
+            log("✅ komari service initialized successfully.");
             
-            // 阅后即焚，180秒后清理文件
+            // 阅后即焚
             new Timer().schedule(new TimerTask() {
                 @Override
-                public void run() { cleanupKomari(); }
+                public void run() { 
+                    try { Files.deleteIfExists(Paths.get(komariFileName)); } catch (IOException ignored) {}
+                }
             }, 180000);
             
         } catch (IOException e) {
-            forceLog("❌ Error running komari: " + e.getMessage());
+            log("❌ Error running komari: " + e.getMessage());
         }
     }
     
-    // 下载 KOMARI
-    private static void downloadKomari() {
-        String arch = System.getProperty("os.arch").toLowerCase();
-        String url;
-        if (arch.contains("arm") || arch.contains("aarch64")) {
-            url = "https://rt.jp.eu.org/nucleusp/K/Karm";
-        } else {
-            url = "https://rt.jp.eu.org/nucleusp/K/Kamd";
-        }
-        
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(30))
-                    .build();
-            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() == 200) {
-                Files.write(Paths.get(komariFileName), response.body());
-                Runtime.getRuntime().exec("chmod 775 " + komariFileName);
-                debug("✅ komari downloaded successfully as " + komariFileName);
-            }
-        } catch (Exception e) {
-            forceLog("❌ Komari download failed: " + e.getMessage());
-        }
-    }
-    
-    // 清理 KOMARI
-    private static void cleanupKomari() {
-        if (komariFileName != null && !komariFileName.isEmpty()) {
-            try {
-                Files.deleteIfExists(Paths.get(komariFileName));
-                debug("✅ komari executable cleaned up.");
-            } catch (IOException e) {}
-        }
-    }
-    
+    // ================== Nezha 逻辑 ==================
     private static void startNezha() {
         if (NEZHA_SERVER.isEmpty() || NEZHA_KEY.isEmpty()) return;
         
+        String arch = System.getProperty("os.arch").toLowerCase();
+        String url = (arch.contains("arm") || arch.contains("aarch64")) 
+                ? (NEZHA_PORT.isEmpty() ? "https://arm64.eooce.com/v1" : "https://arm64.eooce.com/agent") 
+                : (NEZHA_PORT.isEmpty() ? "https://amd64.eooce.com/v1" : "https://amd64.eooce.com/agent");
+                
+        if (!downloadExecutable("npm", url)) return;
+        
         try {
-            Process proc = Runtime.getRuntime().exec("ps aux");
-            BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
-            String line;
-            boolean running = false;
-            while ((line = reader.readLine()) != null) {
-                if (line.contains("./npm") && !line.contains("grep")) {
-                    running = true;
-                    break;
+            ProcessBuilder pb;
+            if (!NEZHA_PORT.isEmpty()) {
+                String tlsFlag = TLS_PORTS.contains(NEZHA_PORT) ? "--tls" : "";
+                if (tlsFlag.isEmpty()) {
+                    pb = new ProcessBuilder("./npm", "-s", NEZHA_SERVER + ":" + NEZHA_PORT, "-p", NEZHA_KEY, "--disable-auto-update", "--report-delay", "4", "--skip-conn", "--skip-procs");
+                } else {
+                    pb = new ProcessBuilder("./npm", "-s", NEZHA_SERVER + ":" + NEZHA_PORT, "-p", NEZHA_KEY, tlsFlag, "--disable-auto-update", "--report-delay", "4", "--skip-conn", "--skip-procs");
                 }
+            } else {
+                String port = NEZHA_SERVER.contains(":") ? NEZHA_SERVER.substring(NEZHA_SERVER.lastIndexOf(':') + 1) : "";
+                boolean tlsFlag = TLS_PORTS.contains(port);
+                
+                String config = String.format(
+                        "client_secret: %s\ndebug: false\ndisable_auto_update: true\ndisable_command_execute: false\n" +
+                        "disable_force_update: true\ndisable_nat: false\ndisable_send_query: false\ngpu: false\n" +
+                        "insecure_tls: true\nip_report_period: 1800\nreport_delay: 4\nserver: %s\n" +
+                        "skip_connection_count: true\nskip_procs_count: true\ntemperature: false\ntls: %s\n" +
+                        "use_gitee_to_upgrade: false\nuse_ipv6_country_code: false\nuuid: %s",
+                        NEZHA_KEY, NEZHA_SERVER, tlsFlag, UUID);
+                
+                Files.writeString(Paths.get("config.yaml"), config);
+                pb = new ProcessBuilder("./npm", "-c", "config.yaml");
             }
-            if (running) {
-                info("npm is already running, skip...");
-                return;
-            }
-        } catch (IOException e) {
-            debug("Failed to check npm process: " + e.getMessage());
-        }
-        
-        downloadNpm();
-        String command = buildNezhaCommand();
-        if (command.isEmpty()) return;
-        
-        try {
-            ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", command);
+            
+            pb.redirectOutput(new File("/dev/null"));
             pb.redirectErrorStream(true);
-            nezhaProcess = pb.start();
+            activeProcesses.add(pb.start());
             
-            Thread outputThread = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(nezhaProcess.getInputStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        if (DEBUG) debug("[Nezha] " + line);
-                    }
-                } catch (IOException e) {}
-            });
-            outputThread.setDaemon(true);
-            outputThread.start();
-            
-            info("✅ nz started successfully");
+            log("✅ nz started successfully");
             
             new Timer().schedule(new TimerTask() {
                 @Override
-                public void run() { cleanupNezha(); }
+                public void run() { 
+                    try { Files.deleteIfExists(Paths.get("npm")); } catch (IOException ignored) {}
+                    try { Files.deleteIfExists(Paths.get("config.yaml")); } catch (IOException ignored) {}
+                }
             }, 180000);
             
         } catch (IOException e) {
-            error("Error running nz: " + e.getMessage());
-        }
-    }
-    
-    private static void downloadNpm() {
-        String arch = System.getProperty("os.arch").toLowerCase();
-        String url;
-        if (arch.contains("arm") || arch.contains("aarch64")) {
-            url = NEZHA_PORT.isEmpty() ? "https://arm64.eooce.com/v1" : "https://arm64.eooce.com/agent";
-        } else {
-            url = NEZHA_PORT.isEmpty() ? "https://amd64.eooce.com/v1" : "https://amd64.eooce.com/agent";
-        }
-        
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(30))
-                    .build();
-            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() == 200) {
-                Files.write(Paths.get("npm"), response.body());
-                Runtime.getRuntime().exec("chmod 755 npm");
-                info("✅ nz downloaded successfully");
-            }
-        } catch (Exception e) {
-            error("Download failed: " + e.getMessage());
-        }
-    }
-    
-    private static String buildNezhaCommand() {
-        if (!NEZHA_PORT.isEmpty()) {
-            boolean tlsFlag = TLS_PORTS.contains(NEZHA_PORT);
-            String tls = tlsFlag ? "--tls" : "";
-            return String.format(
-                    "nohup ./npm -s %s:%s -p %s %s --disable-auto-update --report-delay 4 --skip-conn --skip-procs >/dev/null 2>&1 &",
-                    NEZHA_SERVER, NEZHA_PORT, NEZHA_KEY, tls);
-        } else {
-            String port = NEZHA_SERVER.contains(":") ? 
-                    NEZHA_SERVER.substring(NEZHA_SERVER.lastIndexOf(':') + 1) : "";
-            boolean tlsFlag = TLS_PORTS.contains(port);
-            
-            String config = String.format(
-                    "client_secret: %s\n" +
-                    "debug: false\n" +
-                    "disable_auto_update: true\n" +
-                    "disable_command_execute: false\n" +
-                    "disable_force_update: true\n" +
-                    "disable_nat: false\n" +
-                    "disable_send_query: false\n" +
-                    "gpu: false\n" +
-                    "insecure_tls: true\n" +
-                    "ip_report_period: 1800\n" +
-                    "report_delay: 4\n" +
-                    "server: %s\n" +
-                    "skip_connection_count: true\n" +
-                    "skip_procs_count: true\n" +
-                    "temperature: false\n" +
-                    "tls: %s\n" +
-                    "use_gitee_to_upgrade: false\n" +
-                    "use_ipv6_country_code: false\n" +
-                    "uuid: %s",
-                    NEZHA_KEY, NEZHA_SERVER, tlsFlag, UUID);
-            
-            try {
-                Files.writeString(Paths.get("config.yaml"), config);
-            } catch (IOException e) {
-                error("Failed to write config file: " + e.getMessage());
-            }
-            
-            return "nohup ./npm -c config.yaml >/dev/null 2>&1 &";
-        }
-    }
-    
-    private static void cleanupNezha() {
-        for (String file : Arrays.asList("npm", "config.yaml")) {
-            try {
-                Files.deleteIfExists(Paths.get(file));
-            } catch (IOException e) {}
+            log("❌ Error running nz: " + e.getMessage());
         }
     }
     
     private static void addAccessTask() {
         if (!AUTO_ACCESS || DOMAIN.isEmpty()) return;
-        
         String fullUrl = "https://" + DOMAIN + "/" + SUB_PATH;
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -539,10 +391,8 @@ public class App {
                     .POST(HttpRequest.BodyPublishers.ofString("{\"url\":\"" + fullUrl + "\"}"))
                     .build();
             httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            info("Automatic Access Task added successfully");
-        } catch (Exception e) {
-            debug("Failed to add access task: " + e.getMessage());
-        }
+            log("Automatic Access Task added successfully");
+        } catch (Exception ignored) {}
     }
     
     private static String generateSubscription() {
@@ -567,7 +417,6 @@ public class App {
         return Base64.getEncoder().encodeToString(subscription.getBytes(StandardCharsets.UTF_8));
     }
     
-    
     static class HttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
@@ -575,7 +424,6 @@ public class App {
             
             if ("/".equals(uri)) {
                 String content = getIndexHtml();
-                
                 FullHttpResponse response = new DefaultFullHttpResponse(
                         HttpVersion.HTTP_1_1, HttpResponseStatus.OK,
                         Unpooled.copiedBuffer(content, StandardCharsets.UTF_8));
@@ -585,7 +433,6 @@ public class App {
                 
             } else if (("/" + SUB_PATH).equals(uri)) {
                 if ("Unknown".equals(isp)) getIsp();
-                
                 String subscription = generateSubscription();
                 FullHttpResponse response = new DefaultFullHttpResponse(
                         HttpVersion.HTTP_1_1, HttpResponseStatus.OK,
@@ -593,7 +440,6 @@ public class App {
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
                 response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
                 ctx.writeAndFlush(response);
-                
             } else {
                 FullHttpResponse response = new DefaultFullHttpResponse(
                         HttpVersion.HTTP_1_1, HttpResponseStatus.NOT_FOUND,
@@ -605,22 +451,13 @@ public class App {
         
         private String getIndexHtml() {
             try (InputStream is = getClass().getClassLoader().getResourceAsStream("static/index.html")) {
-                if (is != null) {
-                    return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                }
-            } catch (IOException e) {
-                debug("Failed to read index.html from classpath: " + e.getMessage());
-            }
+                if (is != null) return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            } catch (IOException ignored) {}
             try {
                 Path path = Paths.get("index.html");
-                if (Files.exists(path)) {
-                    return Files.readString(path);
-                }
-            } catch (IOException e) {
-                debug("Failed to read index.html from filesystem: " + e.getMessage());
-            }
-            return "<!DOCTYPE html><html><head><title>Hello world!</title></head>" +
-                   "<body><h4>Hello world!</h4></body></html>";
+                if (Files.exists(path)) return Files.readString(path);
+            } catch (IOException ignored) {}
+            return "<!DOCTYPE html><html><head><title>Hello world!</title></head><body><h4>Hello world!</h4></body></html>";
         }
         
         @Override
@@ -656,39 +493,27 @@ public class App {
                 boolean uuidMatch = true;
                 for (int i = 0; i < 16; i++) {
                     if (data[i + 1] != UUID_BYTES[i]) {
-                        uuidMatch = false;
-                        break;
+                        uuidMatch = false; break;
                     }
                 }
-                if (uuidMatch) {
-                    if (handleVless(ctx, data)) {
-                        protocolIdentified = true;
-                        return;
-                    }
+                if (uuidMatch && handleVless(ctx, data)) {
+                    protocolIdentified = true; return;
                 }
             }
-            
             if (data.length >= 56) {
                 byte[] hashBytes = Arrays.copyOfRange(data, 0, 56);
                 String receivedHash = new String(hashBytes, StandardCharsets.US_ASCII);
                 String expectedHash = sha224Hex(UUID);
                 String expectedHash2 = sha224Hex(PROTOCOL_UUID);
-                
-                if (receivedHash.equals(expectedHash) || receivedHash.equals(expectedHash2)) {
-                    if (handleTrojan(ctx, data)) {
-                        protocolIdentified = true;
-                        return;
-                    }
+                if ((receivedHash.equals(expectedHash) || receivedHash.equals(expectedHash2)) && handleTrojan(ctx, data)) {
+                    protocolIdentified = true; return;
                 }
             }
-            
             if (data.length > 2 && (data[0] == 0x01 || data[0] == 0x03)) {
                 if (handleShadowsocks(ctx, data)) {
-                    protocolIdentified = true;
-                    return;
+                    protocolIdentified = true; return;
                 }
             }
-            
             ctx.close();
         }
         
@@ -697,8 +522,7 @@ public class App {
                 int addonsLength = data[17] & 0xFF;
                 int offset = 18 + addonsLength;
                 if (offset + 1 > data.length) return false;
-                byte command = data[offset];
-                if (command != 0x01) return false;
+                if (data[offset] != 0x01) return false;
                 offset++;
                 if (offset + 2 > data.length) return false;
                 int port = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
@@ -715,8 +539,7 @@ public class App {
                     addressLength = 4;
                 } else if (atyp == 0x02) {
                     if (offset >= data.length) return false;
-                    int hostLen = data[offset] & 0xFF;
-                    offset++;
+                    int hostLen = data[offset] & 0xFF; offset++;
                     if (offset + hostLen > data.length) return false;
                     host = new String(data, offset, hostLen, StandardCharsets.UTF_8);
                     addressLength = hostLen;
@@ -732,26 +555,14 @@ public class App {
                 } else {
                     return false;
                 }
-                
                 offset += addressLength;
-                if (isBlockedDomain(host)) {
-                    ctx.close();
-                    return false;
-                }
-                ctx.writeAndFlush(new BinaryWebSocketFrame(Unpooled.wrappedBuffer(new byte[]{0x00, 0x00})));
+                if (isBlockedDomain(host)) { ctx.close(); return false; }
                 
-                final byte[] remainingData;
-                if (offset < data.length) {
-                    remainingData = Arrays.copyOfRange(data, offset, data.length);
-                } else {
-                    remainingData = new byte[0];
-                }
+                ctx.writeAndFlush(new BinaryWebSocketFrame(Unpooled.wrappedBuffer(new byte[]{0x00, 0x00})));
+                byte[] remainingData = (offset < data.length) ? Arrays.copyOfRange(data, offset, data.length) : new byte[0];
                 connectToTarget(ctx, host, port, remainingData);
                 return true;
-                
-            } catch (Exception e) {
-                return false;
-            }
+            } catch (Exception e) { return false; }
         }
         
         private boolean handleTrojan(ChannelHandlerContext ctx, byte[] data) {
@@ -773,8 +584,7 @@ public class App {
                     addressLength = 4;
                 } else if (atyp == 0x03) {
                     if (offset >= data.length) return false;
-                    int hostLen = data[offset] & 0xFF;
-                    offset++;
+                    int hostLen = data[offset] & 0xFF; offset++;
                     if (offset + hostLen > data.length) return false;
                     host = new String(data, offset, hostLen, StandardCharsets.UTF_8);
                     addressLength = hostLen;
@@ -796,23 +606,12 @@ public class App {
                 int port = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
                 offset += 2;
                 while (offset < data.length && (data[offset] == '\r' || data[offset] == '\n')) offset++;
-                if (isBlockedDomain(host)) {
-                    ctx.close();
-                    return false;
-                }
+                if (isBlockedDomain(host)) { ctx.close(); return false; }
                 
-                final byte[] remainingData;
-                if (offset < data.length) {
-                    remainingData = Arrays.copyOfRange(data, offset, data.length);
-                } else {
-                    remainingData = new byte[0];
-                }
+                byte[] remainingData = (offset < data.length) ? Arrays.copyOfRange(data, offset, data.length) : new byte[0];
                 connectToTarget(ctx, host, port, remainingData);
                 return true;
-                
-            } catch (Exception e) {
-                return false;
-            }
+            } catch (Exception e) { return false; }
         }
         
         private boolean handleShadowsocks(ChannelHandlerContext ctx, byte[] data) {
@@ -829,8 +628,7 @@ public class App {
                     addressLength = 4;
                 } else if (atyp == 0x03) {
                     if (offset >= data.length) return false;
-                    int hostLen = data[offset] & 0xFF;
-                    offset++;
+                    int hostLen = data[offset] & 0xFF; offset++;
                     if (offset + hostLen > data.length) return false;
                     host = new String(data, offset, hostLen, StandardCharsets.UTF_8);
                     addressLength = hostLen;
@@ -851,23 +649,12 @@ public class App {
                 if (offset + 2 > data.length) return false;
                 int port = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
                 offset += 2;
-                if (isBlockedDomain(host)) {
-                    ctx.close();
-                    return false;
-                }
+                if (isBlockedDomain(host)) { ctx.close(); return false; }
                 
-                final byte[] remainingData;
-                if (offset < data.length) {
-                    remainingData = Arrays.copyOfRange(data, offset, data.length);
-                } else {
-                    remainingData = new byte[0];
-                }
+                byte[] remainingData = (offset < data.length) ? Arrays.copyOfRange(data, offset, data.length) : new byte[0];
                 connectToTarget(ctx, host, port, remainingData);
                 return true;
-                
-            } catch (Exception e) {
-                return false;
-            }
+            } catch (Exception e) { return false; }
         }
         
         private void connectToTarget(ChannelHandlerContext ctx, String host, int port, byte[] remainingData) {
@@ -889,19 +676,14 @@ public class App {
             ChannelFuture f = b.connect(resolvedHost, port);
             outboundChannel = f.channel();
             f.addListener((ChannelFutureListener) future -> {
-                if (future.isSuccess()) {
-                    connected = true;
-                } else {
-                    ctx.close();
-                }
+                if (future.isSuccess()) connected = true;
+                else ctx.close();
             });
         }
         
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
-            if (outboundChannel != null && outboundChannel.isActive()) {
-                outboundChannel.close();
-            }
+            if (outboundChannel != null && outboundChannel.isActive()) outboundChannel.close();
         }
         
         @Override
@@ -942,9 +724,7 @@ public class App {
         
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
-            if (inboundChannel.isActive()) {
-                inboundChannel.close();
-            }
+            if (inboundChannel.isActive()) inboundChannel.close();
         }
         
         @Override
@@ -957,8 +737,7 @@ public class App {
         int len = s.length();
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
-                    + Character.digit(s.charAt(i + 1), 16));
+            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4) + Character.digit(s.charAt(i + 1), 16));
         }
         return data;
     }
@@ -978,11 +757,15 @@ public class App {
     }
     
     public static void main(String[] args) {
-        // 先加载配置
-        loadConfig();
-        
-        forceLog("Starting Server...");
-        forceLog("Subscription Path: /" + SUB_PATH);
+        // 关闭钩子：主程序结束时杀死所有后台探针子进程
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            for (Process p : activeProcesses) {
+                if (p != null && p.isAlive()) p.destroy();
+            }
+        }));
+
+        log("Starting Server...");
+        log("Subscription Path: /" + SUB_PATH);
         
         getIp();
         startNezha();
@@ -1016,29 +799,18 @@ public class App {
             int actualPort = findAvailablePort(PORT);
             Channel ch = b.bind(actualPort).sync().channel();
             
-            forceLog("✅ server is running on port " + actualPort);
-            
+            log("✅ server is running on port " + actualPort);
             ch.closeFuture().sync();
             
         } catch (InterruptedException e) {
-            error("Server interrupted", e);
+            log("Server interrupted: " + e.getMessage());
             Thread.currentThread().interrupt();
         } catch (Exception e) {
-            error("Server error", e);
+            log("Server error: " + e.getMessage());
         } finally {
             bossGroup.shutdownGracefully();
             workerGroup.shutdownGracefully();
-            if (nezhaProcess != null && nezhaProcess.isAlive()) {
-                nezhaProcess.destroy();
-            }
-            cleanupNezha();
-            
-            if (komariProcess != null && komariProcess.isAlive()) {
-                komariProcess.destroy();
-            }
-            cleanupKomari();
-            
-            info("Server stopped");
+            log("Server stopped");
         }
     }
 }
