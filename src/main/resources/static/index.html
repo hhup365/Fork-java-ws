@@ -3,964 +3,660 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodeFlow | Visual Development Platform</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <title>NEXUS | The Future of Living</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,10 90,90 10,90' fill='none' stroke='%2300f2ff' stroke-width='3'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg-dark: #050505;
+            --text-main: #ffffff;
+            --text-muted: #888888;
+            --accent-cyan: #00f2ff;
+            --accent-purple: #bd00ff;
+            --card-bg: rgba(20, 20, 20, 0.6);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --ease-smooth: cubic-bezier(0.23, 1, 0.32, 1);
         }
-        
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Roboto', sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f9fbfd;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: "Space Grotesk", sans-serif;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
         }
-        
-        h1, h2, h3, h4 {
-            font-family: 'Poppins', sans-serif;
-            font-weight: 600;
-            line-height: 1.3;
-        }
-        
-        .container {
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
-        
-        /* Header & Navigation */
-        header {
-            background-color: #fff;
-            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+
+        #canvas-bg {
             position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -1;
+        }
+
+        .nav-bar {
+            position: fixed;
+            top: 0; left: 0;
             width: 100%;
-            z-index: 1000;
-        }
-        
-        nav {
+            padding: 30px 50px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 0;
+            z-index: 100;
+            mix-blend-mode: difference;
         }
-        
+
         .logo {
-            display: flex;
-            align-items: center;
-        }
-        
-        .logo-icon {
-            color: #4361ee;
-            font-size: 28px;
-            margin-right: 10px;
-        }
-        
-        .logo-text {
-            font-family: 'Poppins', sans-serif;
-            font-size: 24px;
-            font-weight: 700;
-            color: #333;
-        }
-        
-        .logo-text span {
-            color: #4361ee;
-        }
-        
-        .nav-links {
-            display: flex;
-            list-style: none;
-        }
-        
-        .nav-links li {
-            margin-left: 30px;
-        }
-        
-        .nav-links a {
+            font-family: "Syne", sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
             text-decoration: none;
-            color: #555;
-            font-weight: 500;
-            transition: color 0.3s;
+            letter-spacing: -0.05em;
         }
-        
-        .nav-links a:hover {
-            color: #4361ee;
+
+        .date-display {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #fff;
         }
-        
-        .cta-button {
-            background-color: #4361ee;
-            color: white;
-            border: none;
-            padding: 12px 28px;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.3s, transform 0.2s;
-        }
-        
-        .cta-button:hover {
-            background-color: #3a56d4;
-            transform: translateY(-2px);
-        }
-        
-        .mobile-menu-btn {
-            display: none;
-            background: none;
-            border: none;
-            font-size: 24px;
-            color: #333;
-            cursor: pointer;
-        }
-        
-        /* Hero Section */
-        .hero {
-            padding: 150px 0 100px;
-            background: linear-gradient(135deg, #f0f4ff 0%, #f9fbfd 100%);
-        }
-        
-        .hero-content {
+
+        header {
+            min-height: 80vh;
             display: flex;
+            flex-direction: column;
+            justify-content: center;
             align-items: center;
-            justify-content: space-between;
+            padding: 0 5%;
+            position: relative;
+            z-index: 10;
         }
-        
-        .hero-text {
-            flex: 1;
-            padding-right: 40px;
+
+        .hero-title {
+            font-family: "Syne", sans-serif;
+            font-size: clamp(3rem, 10vw, 8rem);
+            font-weight: 800;
+            line-height: 1.1;
+            text-align: center;
+            background: linear-gradient(to right, #fff, #aaa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 2rem;
+            letter-spacing: -0.03em;
+            max-width: 100%;
+            word-wrap: break-word;
         }
-        
-        .hero-text h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-            color: #222;
-        }
-        
-        .hero-text h1 span {
-            color: #4361ee;
-        }
-        
-        .hero-text p {
-            font-size: 18px;
-            color: #666;
-            margin-bottom: 30px;
-            max-width: 600px;
-        }
-        
-        .hero-buttons {
+
+        .hero-tags {
             display: flex;
+            gap: 20px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--accent-cyan);
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 100px 5%;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.6s var(--ease-smooth);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-10px) scale(1.02);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 20px 50px rgba(0, 242, 255, 0.15);
+        }
+
+        .card:nth-child(1), .card:nth-child(7) {
+            grid-column: span 2;
+        }
+        
+        .card:nth-child(4), .card:nth-child(10) {
+            grid-row: span 2;
+        }
+
+        .card-img-wrap {
+            width: 100%;
+            height: 300px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .card:nth-child(4) .card-img-wrap, 
+        .card:nth-child(10) .card-img-wrap {
+            height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 0;
+        }
+        
+        .card:nth-child(4) .card-content, 
+        .card:nth-child(10) .card-content {
+            margin-top: auto;
+            position: relative;
+            z-index: 1;
+            background: linear-gradient(to top, #000, transparent);
+        }
+
+        .card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 1s var(--ease-smooth);
+            filter: grayscale(20%);
+        }
+
+        .card:hover .card-img {
+            transform: scale(1.1);
+            filter: grayscale(0%);
+        }
+
+        .card-content {
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
             gap: 15px;
         }
-        
-        .secondary-button {
-            background-color: white;
-            color: #4361ee;
-            border: 2px solid #4361ee;
-            padding: 12px 28px;
-            border-radius: 6px;
+
+        .card-meta {
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
             font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .secondary-button:hover {
-            background-color: #f0f4ff;
-        }
-        
-        .hero-image {
-            flex: 1;
-            text-align: center;
-        }
-        
-        .hero-image img {
-            max-width: 100%;
-            border-radius: 10px;
-            box-shadow: 0 20px 40px rgba(67, 97, 238, 0.15);
-        }
-        
-        /* Features Section */
-        .section-title {
-            text-align: center;
-            margin-bottom: 60px;
-        }
-        
-        .section-title h2 {
-            font-size: 36px;
-            color: #222;
-            margin-bottom: 15px;
-        }
-        
-        .section-title p {
-            color: #666;
-            max-width: 700px;
-            margin: 0 auto;
-        }
-        
-        .features {
-            padding: 100px 0;
-            background-color: white;
-        }
-        
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 40px;
-        }
-        
-        .feature-card {
-            background: #fff;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-        
-        .feature-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
-        }
-        
-        .feature-icon {
-            background-color: #eef2ff;
-            color: #4361ee;
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 20px;
-            font-size: 28px;
+            justify-content: space-between;
         }
-        
-        .feature-card h3 {
-            font-size: 22px;
-            margin-bottom: 15px;
-        }
-        
-        .feature-card p {
-            color: #666;
-        }
-        
-        /* Benefits Section */
-        .benefits {
-            padding: 100px 0;
-            background-color: #f0f4ff;
-        }
-        
-        .benefits-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 30px;
-        }
-        
-        .benefit-item {
-            text-align: center;
-            padding: 30px 20px;
-        }
-        
-        .benefit-icon {
-            color: #4361ee;
-            font-size: 40px;
-            margin-bottom: 20px;
-        }
-        
-        .benefit-item h3 {
-            font-size: 22px;
-            margin-bottom: 15px;
-        }
-        
-        .benefit-item p {
-            color: #666;
-        }
-        
-        /* Testimonials */
-        .testimonials {
-            padding: 100px 0;
-            background-color: white;
-        }
-        
-        .testimonial-slider {
-            max-width: 800px;
-            margin: 0 auto;
-            position: relative;
-        }
-        
-        .testimonial {
-            background: #f9fbfd;
-            padding: 40px;
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-        }
-        
-        .testimonial-text {
-            font-size: 18px;
-            font-style: italic;
-            margin-bottom: 30px;
-            color: #555;
-        }
-        
-        .testimonial-author {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .author-avatar {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background-color: #ddd;
-            margin-right: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: #4361ee;
-            font-size: 24px;
-        }
-        
-        .author-info h4 {
-            font-size: 18px;
-            margin-bottom: 5px;
-        }
-        
-        .author-info p {
-            color: #777;
-            font-size: 14px;
-        }
-        
-        /* Pricing Section */
-        .pricing {
-            padding: 100px 0;
-            background-color: #f9fbfd;
-        }
-        
-        .pricing-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 30px;
-        }
-        
-        .pricing-card {
-            background: white;
-            border-radius: 10px;
-            padding: 40px 30px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
-            text-align: center;
-            transition: transform 0.3s;
-        }
-        
-        .pricing-card.featured {
-            border-top: 5px solid #4361ee;
-            transform: scale(1.05);
-            position: relative;
-        }
-        
-        .featured-badge {
-            position: absolute;
-            top: -12px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #4361ee;
-            color: white;
-            padding: 5px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        
-        .pricing-card:hover {
-            transform: translateY(-10px);
-        }
-        
-        .pricing-card.featured:hover {
-            transform: scale(1.05) translateY(-10px);
-        }
-        
-        .plan-name {
-            font-size: 24px;
-            margin-bottom: 15px;
-            color: #333;
-        }
-        
-        .plan-price {
-            font-size: 48px;
+
+        .card-title {
+            font-family: "Syne", sans-serif;
+            font-size: 1.8rem;
             font-weight: 700;
-            color: #4361ee;
-            margin-bottom: 20px;
+            line-height: 1.1;
+            color: #fff;
         }
-        
-        .plan-price span {
-            font-size: 16px;
-            color: #777;
+
+        .card-excerpt {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            line-height: 1.6;
         }
-        
-        .plan-features {
-            list-style: none;
+
+        .modal {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 999;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-bg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(15px);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .modal-content {
+            width: 60%;
+            max-width: 900px;
+            max-height: 80vh;
+            background: #111;
+            border: 1px solid var(--accent-cyan);
+            padding: 60px;
+            overflow-y: auto;
+            position: relative;
+            transform: translateY(50px);
+            opacity: 0;
+            transition: all 0.6s var(--ease-smooth);
+            box-shadow: 0 0 100px rgba(0, 242, 255, 0.2);
+        }
+
+        .modal.active { pointer-events: auto; }
+        .modal.active .modal-bg { opacity: 1; }
+        .modal.active .modal-content { transform: translateY(0); opacity: 1; }
+
+        .modal-close {
+            position: absolute;
+            top: 30px; right: 30px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-family: "Space Grotesk", sans-serif;
+            cursor: pointer;
+            font-size: 1rem;
+            letter-spacing: 0.1em;
+        }
+
+        .modal-body h2 {
+            font-family: "Syne", sans-serif;
+            font-size: 3rem;
             margin-bottom: 30px;
+            line-height: 1;
+            color: var(--accent-cyan);
         }
-        
-        .plan-features li {
-            padding: 10px 0;
-            border-bottom: 1px solid #eee;
-            color: #555;
-        }
-        
-        .plan-features li:last-child {
-            border-bottom: none;
-        }
-        
-        /* CTA Section */
-        .cta-section {
-            padding: 100px 0;
-            background: linear-gradient(135deg, #4361ee 0%, #3a56d4 100%);
-            text-align: center;
-            color: white;
-        }
-        
-        .cta-section h2 {
-            font-size: 36px;
-            margin-bottom: 20px;
-        }
-        
-        .cta-section p {
-            font-size: 18px;
-            max-width: 700px;
-            margin: 0 auto 30px;
-            opacity: 0.9;
-        }
-        
-        .cta-section .cta-button {
-            background-color: white;
-            color: #4361ee;
-            font-size: 16px;
-            padding: 15px 40px;
-        }
-        
-        .cta-section .cta-button:hover {
-            background-color: #f0f4ff;
-        }
-        
-        /* Footer */
-        footer {
-            background-color: #222;
+
+        .modal-body p {
+            font-size: 1.2rem;
             color: #ccc;
-            padding: 70px 0 20px;
+            margin-bottom: 20px;
+            line-height: 1.8;
         }
-        
-        .footer-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 40px;
-            margin-bottom: 50px;
+
+        .ticker-wrap {
+            width: 100%;
+            overflow: hidden;
+            background-color: var(--accent-cyan);
+            padding: 20px 0;
+            margin-top: 100px;
+            transform: rotate(-2deg) scale(1.1);
         }
-        
-        .footer-column h3 {
-            font-size: 20px;
-            color: white;
-            margin-bottom: 25px;
+
+        .ticker {
+            display: inline-block;
+            white-space: nowrap;
+            animation: ticker 20s linear infinite;
         }
-        
-        .footer-links {
-            list-style: none;
+
+        .ticker-item {
+            display: inline-block;
+            padding: 0 50px;
+            font-family: "Syne", sans-serif;
+            font-size: 3rem;
+            font-weight: 800;
+            color: #000;
+            text-transform: uppercase;
         }
-        
-        .footer-links li {
-            margin-bottom: 12px;
-        }
-        
-        .footer-links a {
-            color: #aaa;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-        
-        .footer-links a:hover {
-            color: #4361ee;
-        }
-        
-        .copyright {
+
+        footer {
+            padding: 100px 0;
             text-align: center;
-            padding-top: 20px;
-            border-top: 1px solid #444;
-            font-size: 14px;
-            color: #888;
+            color: #555;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+        }
+
+        @keyframes ticker {
+            0% { transform: translate3d(0, 0, 0); }
+            100% { transform: translate3d(-50%, 0, 0); }
+        }
+
+        @media (max-width: 1024px) {
+            .grid { grid-template-columns: repeat(2, 1fr); }
+            .card:nth-child(n) { grid-column: auto; grid-row: auto; }
+            .modal-content { width: 90%; padding: 40px; }
         }
         
-        /* Responsive Design */
-        @media (max-width: 992px) {
-            .hero-content {
-                flex-direction: column;
-            }
-            
-            .hero-text {
-                padding-right: 0;
-                margin-bottom: 50px;
-                text-align: center;
-            }
-            
-            .hero-text p {
-                margin: 0 auto 30px;
-            }
-            
-            .pricing-card.featured {
-                transform: none;
-            }
-            
-            .pricing-card.featured:hover {
-                transform: translateY(-10px);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .nav-links {
-                display: none;
-            }
-            
-            .mobile-menu-btn {
-                display: block;
-            }
-            
-            .hero-text h1 {
-                font-size: 36px;
-            }
-            
-            .section-title h2 {
-                font-size: 30px;
-            }
-            
-            .hero-buttons {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .hero-buttons button {
-                width: 100%;
-                max-width: 300px;
-            }
-        }
-        
-        @media (max-width: 576px) {
-            .hero {
-                padding: 130px 0 80px;
-            }
-            
-            .features, .benefits, .testimonials, .pricing, .cta-section {
-                padding: 70px 0;
-            }
-            
-            .feature-card, .testimonial {
-                padding: 25px;
-            }
-            
-            .plan-price {
-                font-size: 36px;
-            }
+        @media (max-width: 600px) {
+            .grid { grid-template-columns: 1fr; }
+            .hero-title { font-size: 14vw; }
+            .nav-bar { padding: 20px; }
         }
     </style>
 </head>
 <body>
-    <!-- Header & Navigation -->
+    <canvas id="canvas-bg"></canvas>
+
+    <nav class="nav-bar">
+        <a href="#" class="logo">NEXUS</a>
+        <div class="date-display" id="current-time"></div>
+    </nav>
+
     <header>
-        <div class="container">
-            <nav>
-                <div class="logo">
-                    <div class="logo-icon"><i class="fas fa-bezier-curve"></i></div>
-                    <div class="logo-text">Code<span>Flow</span></div>
-                </div>
-                
-                <ul class="nav-links">
-                    <li><a href="#features">Features</a></li>
-                    <li><a href="#benefits">Benefits</a></li>
-                    <li><a href="#testimonials">Testimonials</a></li>
-                    <li><a href="#pricing">Pricing</a></li>
-                    <li><a href="#">Resources</a></li>
-                </ul>
-                
-                <button class="cta-button">Start Free Trial</button>
-                <button class="mobile-menu-btn"><i class="fas fa-bars"></i></button>
-            </nav>
+        <h1 class="hero-title">BEYOND<br>TOMORROW</h1>
+        <div class="hero-tags">
+            <span>Tech</span> &bull; <span>Culture</span> &bull; <span>Avant-Garde</span>
         </div>
     </header>
 
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="container">
-            <div class="hero-content">
-                <div class="hero-text">
-                    <h1>Build Apps Faster With <span>Visual Development</span></h1>
-                    <p>CodeFlow empowers teams to create enterprise-grade applications with minimal coding. Drag, drop, and connect components to build powerful web and mobile apps in record time.</p>
-                    <div class="hero-buttons">
-                        <button class="cta-button">Start Building Free</button>
-                        <button class="secondary-button">Watch Demo</button>
-                    </div>
-                </div>
-                <div class="hero-image">
-                    <img src="https://images.unsplash.com/photo-1551650975-87deedd944c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" alt="CodeFlow Platform Interface">
-                </div>
-            </div>
+    <main class="container">
+        <div class="grid" id="grid">
         </div>
-    </section>
+    </main>
 
-    <!-- Features Section -->
-    <section class="features" id="features">
-        <div class="container">
-            <div class="section-title">
-                <h2>Powerful Features for Rapid Development</h2>
-                <p>CodeFlow provides all the tools you need to build, deploy, and scale applications without writing extensive code.</p>
-            </div>
-            
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-th-large"></i>
-                    </div>
-                    <h3>Visual Builder</h3>
-                    <p>Drag and drop UI components to design responsive interfaces. Connect data sources with simple point-and-click actions.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-database"></i>
-                    </div>
-                    <h3>Database Integration</h3>
-                    <p>Connect to any data source with built-in connectors. Automatically generate CRUD operations without writing SQL.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-mobile-alt"></i>
-                    </div>
-                    <h3>Cross-Platform</h3>
-                    <p>Build once, deploy everywhere. Generate applications for web, iOS, and Android from a single visual design.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-code"></i>
-                    </div>
-                    <h3>Extensible with Code</h3>
-                    <p>Add custom functionality with JavaScript when needed. Our platform doesn't limit your creativity or complexity.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <h3>Enterprise Security</h3>
-                    <p>Built-in authentication, authorization, and data encryption. SOC2 compliant with enterprise-grade security features.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-rocket"></i>
-                    </div>
-                    <h3>One-Click Deployment</h3>
-                    <p>Deploy to cloud or on-premises with a single click. Automatic scaling and monitoring included.</p>
-                </div>
-            </div>
+    <div class="ticker-wrap">
+        <div class="ticker">
+            <div class="ticker-item">Design the Future</div>
+            <div class="ticker-item">Question Reality</div>
+            <div class="ticker-item">Explore the Unknown</div>
+            <div class="ticker-item">Design the Future</div>
+            <div class="ticker-item">Question Reality</div>
+            <div class="ticker-item">Explore the Unknown</div>
         </div>
-    </section>
+    </div>
 
-    <!-- Benefits Section -->
-    <section class="benefits" id="benefits">
-        <div class="container">
-            <div class="section-title">
-                <h2>Why Choose CodeFlow?</h2>
-                <p>Join thousands of companies accelerating their digital transformation with low-code development.</p>
-            </div>
-            
-            <div class="benefits-grid">
-                <div class="benefit-item">
-                    <div class="benefit-icon">
-                        <i class="fas fa-bolt"></i>
-                    </div>
-                    <h3>10x Faster Development</h3>
-                    <p>Build applications in days instead of months with visual development tools.</p>
-                </div>
-                
-                <div class="benefit-item">
-                    <div class="benefit-icon">
-                        <i class="fas fa-money-bill-wave"></i>
-                    </div>
-                    <h3>Reduce Costs by 70%</h3>
-                    <p>Lower development and maintenance costs with fewer resources required.</p>
-                </div>
-                
-                <div class="benefit-item">
-                    <div class="benefit-icon">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <h3>Citizen Developers</h3>
-                    <p>Enable business users to build solutions with minimal IT assistance.</p>
-                </div>
-                
-                <div class="benefit-item">
-                    <div class="benefit-icon">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <h3>Scale Effortlessly</h3>
-                    <p>From prototype to enterprise-scale applications with the same platform.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Testimonials -->
-    <section class="testimonials" id="testimonials">
-        <div class="container">
-            <div class="section-title">
-                <h2>Trusted by Industry Leaders</h2>
-                <p>See what our customers have to say about their experience with CodeFlow.</p>
-            </div>
-            
-            <div class="testimonial-slider">
-                <div class="testimonial">
-                    <div class="testimonial-text">
-                        "CodeFlow transformed how we deliver solutions to our business units. What used to take 6 months now takes 3 weeks. Our development team can focus on complex problems while business teams build their own solutions."
-                    </div>
-                    <div class="testimonial-author">
-                        <div class="author-avatar">SC</div>
-                        <div class="author-info">
-                            <h4>Sarah Chen</h4>
-                            <p>CTO, TechGrowth Inc.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Pricing Section -->
-    <section class="pricing" id="pricing">
-        <div class="container">
-            <div class="section-title">
-                <h2>Simple, Transparent Pricing</h2>
-                <p>Choose the plan that fits your needs. All plans include core features with no hidden fees.</p>
-            </div>
-            
-            <div class="pricing-grid">
-                <div class="pricing-card">
-                    <h3 class="plan-name">Starter</h3>
-                    <div class="plan-price">$29<span>/month</span></div>
-                    <ul class="plan-features">
-                        <li>Up to 5 users</li>
-                        <li>10 GB storage</li>
-                        <li>Basic components</li>
-                        <li>Community support</li>
-                        <li>1 production app</li>
-                    </ul>
-                    <button class="secondary-button">Get Started</button>
-                </div>
-                
-                <div class="pricing-card featured">
-                    <div class="featured-badge">Most Popular</div>
-                    <h3 class="plan-name">Professional</h3>
-                    <div class="plan-price">$89<span>/month</span></div>
-                    <ul class="plan-features">
-                        <li>Up to 25 users</li>
-                        <li>100 GB storage</li>
-                        <li>All components</li>
-                        <li>Priority support</li>
-                        <li>10 production apps</li>
-                        <li>Custom branding</li>
-                    </ul>
-                    <button class="cta-button">Try Free for 14 Days</button>
-                </div>
-                
-                <div class="pricing-card">
-                    <h3 class="plan-name">Enterprise</h3>
-                    <div class="plan-price">Custom</div>
-                    <ul class="plan-features">
-                        <li>Unlimited users</li>
-                        <li>Unlimited storage</li>
-                        <li>All features included</li>
-                        <li>24/7 dedicated support</li>
-                        <li>Unlimited apps</li>
-                        <li>On-premises option</li>
-                    </ul>
-                    <button class="secondary-button">Contact Sales</button>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- CTA Section -->
-    <section class="cta-section">
-        <div class="container">
-            <h2>Start Building Today</h2>
-            <p>Join over 10,000 companies that use CodeFlow to accelerate their application development. No credit card required for the free trial.</p>
-            <button class="cta-button">Get Started for Free</button>
-        </div>
-    </section>
-
-    <!-- Footer -->
     <footer>
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-column">
-                    <div class="logo">
-                        <div class="logo-icon"><i class="fas fa-bezier-curve"></i></div>
-                        <div class="logo-text">Code<span>Flow</span></div>
-                    </div>
-                    <p style="margin-top: 20px; color: #aaa;">The leading visual development platform for building enterprise applications with minimal coding.</p>
-                </div>
-                
-                <div class="footer-column">
-                    <h3>Product</h3>
-                    <ul class="footer-links">
-                        <li><a href="#">Features</a></li>
-                        <li><a href="#">Pricing</a></li>
-                        <li><a href="#">Use Cases</a></li>
-                        <li><a href="#">Integrations</a></li>
-                        <li><a href="#">Roadmap</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h3>Resources</h3>
-                    <ul class="footer-links">
-                        <li><a href="#">Documentation</a></li>
-                        <li><a href="#">Tutorials</a></li>
-                        <li><a href="#">Blog</a></li>
-                        <li><a href="#">Community</a></li>
-                        <li><a href="#">Support</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h3>Company</h3>
-                    <ul class="footer-links">
-                        <li><a href="#">About Us</a></li>
-                        <li><a href="#">Careers</a></li>
-                        <li><a href="#">Contact</a></li>
-                        <li><a href="#">Privacy Policy</a></li>
-                        <li><a href="#">Terms of Service</a></li>
-                    </ul>
-                </div>
-            </div>
-            
-            <div class="copyright">
-                <p>&copy; 2023 CodeFlow. All rights reserved.</p>
-            </div>
-        </div>
+        <p>&copy; <span id="year-range"></span> NEXUS. ALL SYSTEMS OPERATIONAL.</p>
     </footer>
 
+    <div class="modal" id="modal">
+        <div class="modal-bg" id="modal-bg"></div>
+        <div class="modal-content">
+            <button class="modal-close" id="modal-close">[ CLOSE ]</button>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
     <script>
-        // Mobile menu toggle
-        document.querySelector('.mobile-menu-btn').addEventListener('click', function() {
-            const navLinks = document.querySelector('.nav-links');
-            navLinks.style.display = navLinks.style.display === 'flex' ? 'none' : 'flex';
+        const canvas = document.getElementById('canvas-bg');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Blob {
+            constructor() {
+                this.init();
+            }
             
-            // Adjust for mobile
-            if (window.innerWidth <= 768) {
-                if (navLinks.style.display === 'flex') {
-                    navLinks.style.flexDirection = 'column';
-                    navLinks.style.position = 'absolute';
-                    navLinks.style.top = '80px';
-                    navLinks.style.left = '0';
-                    navLinks.style.width = '100%';
-                    navLinks.style.backgroundColor = 'white';
-                    navLinks.style.padding = '20px';
-                    navLinks.style.boxShadow = '0 10px 20px rgba(0,0,0,0.1)';
-                    
-                    const navItems = document.querySelectorAll('.nav-links li');
-                    navItems.forEach(item => {
-                        item.style.margin = '10px 0';
-                    });
+            init() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.r = Math.random() * 200 + 100; 
+                this.color = Math.random() > 0.5 ? '#00f2ff' : '#bd00ff';
+                this.life = 0;
+                this.maxLife = Math.random() * 100 + 200;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life++;
+
+                if(this.x < -this.r || this.x > width + this.r || this.y < -this.r || this.y > height + this.r || this.life > this.maxLife) {
+                    this.init();
                 }
             }
-        });
-        
-        // Smooth scrolling for anchor links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function(e) {
-                e.preventDefault();
+
+            draw() {
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r);
+                gradient.addColorStop(0, this.color + '44'); 
+                gradient.addColorStop(1, 'transparent');
                 
-                const targetId = this.getAttribute('href');
-                if(targetId === '#') return;
-                
-                const targetElement = document.querySelector(targetId);
-                if(targetElement) {
-                    window.scrollTo({
-                        top: targetElement.offsetTop - 80,
-                        behavior: 'smooth'
-                    });
-                    
-                    // Close mobile menu if open
-                    if(window.innerWidth <= 768) {
-                        document.querySelector('.nav-links').style.display = 'none';
-                    }
-                }
+                ctx.globalCompositeOperation = 'screen';
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        }
+
+        const blobs = Array.from({ length: 15 }, () => new Blob());
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, width, height);
+
+            blobs.forEach(blob => {
+                blob.update();
+                blob.draw();
             });
-        });
-        
-        // Simple testimonial slider
-        const testimonials = [
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        const articles = [
             {
-                text: "CodeFlow transformed how we deliver solutions to our business units. What used to take 6 months now takes 3 weeks. Our development team can focus on complex problems while business teams build their own solutions.",
-                name: "Sarah Chen",
-                position: "CTO, TechGrowth Inc.",
-                initials: "SC"
+                tag: "Tech",
+                title: "The Rise of Synthetic Reality",
+                image: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=800&q=80",
+                excerpt: "As VR and AR merge with daily life, we question what it means to be 'present' in a physical world.",
+                content: "We are standing on the precipice of a new existence. The screens that once sat on our desks are now moving to our eyes. Spatial computing is not just an interface update; it is a rewriting of human perception. When the digital overlay becomes indistinguishable from the physical substrate, where does the simulation end and life begin?"
             },
             {
-                text: "We reduced our app development time by 80% using CodeFlow. The visual interface made it easy for our analysts to build data dashboards without waiting for IT resources.",
-                name: "Marcus Johnson",
-                position: "Director of Operations, DataCorp",
-                initials: "MJ"
+                tag: "Urban",
+                title: "Megacity Entropy",
+                image: "https://images.unsplash.com/photo-1734059013972-e6fab175bf65?auto=format&fit=crop&w=800&q=80",
+                excerpt: "The beauty of chaos in the sprawling, vertical metropolises of the future.",
+                content: "As populations swell and cities climb higher into the clouds, a new aesthetic emerges. It is not the clean lines of utopia, but the layered, cable-strewn reality of density. In the shadows of the megastructures, life finds a way to adapt, creating a vibrant ecosystem of neon and noise."
             },
             {
-                text: "As a non-technical founder, CodeFlow allowed me to build our MVP in just 2 months. I could test ideas quickly and iterate based on user feedback without deep coding knowledge.",
-                name: "Lisa Wang",
-                position: "Founder, StartupLabs",
-                initials: "LW"
+                tag: "Design",
+                title: "Brutalism Reborn",
+                image: "https://images.unsplash.com/photo-1486718448742-163732cd1544?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Why raw concrete and imposing geometric forms are making a massive comeback in digital design.",
+                content: "Soft shadows and rounded corners are out. The new web is sharp, heavy, and raw. Neo-Brutalism rejects the overly polished aesthetic of the last decade in favor of high contrast, default fonts, and visible grids. It is honest design for a chaotic era."
+            },
+            {
+                tag: "Culture",
+                title: "The Digital Nomad Paradox",
+                image: "https://images.unsplash.com/photo-1527192491265-7e15c55b1ed2?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Living everywhere and nowhere. The psychological toll of total location independence.",
+                content: "We dreamed of working from Bali beaches and Parisian cafes. But the reality of the nomad life is often one of profound disconnection. When your background changes every month, your sense of self begins to blur. We are discovering that 'home' is not just a place, but a necessary anchor for the human psyche."
+            },
+            {
+                tag: "AI",
+                title: "Generative Artistry",
+                image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Is the machine a tool or a creator? Exploring the blurred lines of authorship.",
+                content: "The algorithm does not sleep, does not eat, and does not suffer. Yet it produces images of haunting beauty. As we collaborate with neural networks, we are finding that creativity is not a uniquely human spark, but a pattern that can be decoded, replicated, and perhaps, expanded."
+            },
+            {
+                tag: "Sound",
+                title: "Synthwave Nostalgia",
+                image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Longing for a future that never happened through the sounds of analog synthesizers.",
+                content: "The 1980s imagined a future of flying cars and chrome cities. We didn't get that future, but we kept the soundtrack. Synthwave is more than music; it is an aesthetic movement, a collective memory of a neon-soaked timeline that exists only in our dreams."
+            },
+            {
+                tag: "Future",
+                title: "Interplanetary Architecture",
+                image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Designing habitats for Mars means rethinking everything we know about construction.",
+                content: "On Mars, there is no wood, no steel, no cement. There is only regolith and radiation. The architects of the next century will be 3D printing structures using local soil, designing hives that protect us from the void while reminding us of Earth."
+            },
+            {
+                tag: "Mind",
+                title: "Dopamine Fasting",
+                image: "https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Resetting the brain's reward system in an age of instant gratification.",
+                content: "We are drowning in cheap pleasure. The scroll, the like, the notification. To regain control, we must embrace boredom. We must stare at walls. We must sit in silence. Only by starving the distraction beast can we feed the deep-focus mind."
+            },
+            {
+                tag: "Style",
+                title: "Techwear Aesthetics",
+                image: "https://images.unsplash.com/photo-1523398002811-999ca8dec234?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Utility meets dystopia. Fashion prepared for the end of the world.",
+                content: "Straps, buckles, waterproof fabrics. Techwear is fashion for the urban survivor. It assumes the city is a hostile environment. It is the uniform of the cyberpunk protagonist, blending into the shadows while being ready for anything."
+            },
+            {
+                tag: "Nature",
+                title: "Bio-Luminescence",
+                image: "https://images.unsplash.com/photo-1560264280-88b68371db39?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Using nature's own light sources to illuminate our cities sustainably.",
+                content: "Imagine trees that glow at night, replacing streetlamps. Imagine algae tanks that light up our living rooms. The future of lighting is not LED, it is DNA. By splicing bio-luminescent genes into flora, we could create an Avatar-like world of organic illumination."
+            },
+            {
+                tag: "Gaming",
+                title: "The Metaverse Mirage",
+                image: "https://images.unsplash.com/photo-1535223289827-42f1e9919769?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Why digital land is booming while physical malls are dying.",
+                content: "We are buying clothes that cannot be worn and land that cannot be walked on. The economy of the virtual is realer than ever. But as we migrate into the servers, we must ask: what happens to the bodies we leave behind in the chair?"
+            },
+            {
+                tag: "Food",
+                title: "Lab-Grown Gastronomy",
+                image: "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Steak without the cow. The ethical and culinary revolution of cellular agriculture.",
+                content: "It looks like meat. It cooks like meat. It tastes like meat. But it was grown in a sterile bioreactor. This is the end of the slaughterhouse and the beginning of a new culinary era where we can design textures and flavors that nature never intended."
+            },
+            {
+                tag: "Crypto",
+                title: "The Decentralized Web",
+                image: "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Taking back ownership of our data from the silicon giants.",
+                content: "Web3 is a chaotic, scam-ridden, yet hopeful frontier. The dream is simple: own your identity. Own your content. Cut out the middleman. It is the Wild West of code, and the sheriffs have not arrived yet."
+            },
+            {
+                tag: "Auto",
+                title: "Electric Dreams",
+                image: "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=800&q=80",
+                excerpt: "The silence of the engine and the death of the gas station aesthetic.",
+                content: "The roar of the V8 is dying. The future is silent torque. But we will miss the smell of gasoline? The grit of the garage? Electric cars are computers on wheels, sterile and efficient. We are trading soul for survival."
+            },
+            {
+                tag: "Space",
+                title: "The Silent Void",
+                image: "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Looking up and realizing how terribly alone and small we really are.",
+                content: "Space exploration is the ultimate exercise in perspective. The Pale Blue Dot. The sheer scale of the nothingness between stars. It is terrifying, yet it drives us to connect, to preserve, and to explore. We are the universe observing itself."
+            },
+            {
+                tag: "Code",
+                title: "Hacking the Human",
+                image: "https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?auto=format&fit=crop&w=800&q=80",
+                excerpt: "Bio-hacking and the quest for immortality through technology.",
+                content: "Implants, nootropics, gene editing. We are treating the human body like legacy software that needs a patch. Transhumanism is no longer sci-fi; it is a lifestyle choice for those who believe death is just a technical error to be solved."
             }
         ];
-        
-        let currentTestimonial = 0;
-        const testimonialElement = document.querySelector('.testimonial');
-        
-        function rotateTestimonial() {
-            currentTestimonial = (currentTestimonial + 1) % testimonials.length;
-            updateTestimonial();
+
+        function generateDates(n) {
+            let d = new Date();
+            let res = [];
+            
+            let firstGap = Math.floor(Math.random() * 3) + 1;
+            d.setDate(d.getDate() - firstGap);
+            res.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+
+            for(let i=1; i<n; i++) {
+                let gap = Math.floor(Math.random() * 40) + 10;
+                d.setDate(d.getDate() - gap);
+                res.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+            }
+            return res;
         }
-        
-        function updateTestimonial() {
-            const testimonial = testimonials[currentTestimonial];
-            testimonialElement.innerHTML = `
-                <div class="testimonial-text">"${testimonial.text}"</div>
-                <div class="testimonial-author">
-                    <div class="author-avatar">${testimonial.initials}</div>
-                    <div class="author-info">
-                        <h4>${testimonial.name}</h4>
-                        <p>${testimonial.position}</p>
+
+        const dates = generateDates(articles.length);
+        const grid = document.getElementById('grid');
+
+        articles.forEach((art, i) => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            const isTextOverlay = (i === 3 || i === 9); 
+            
+            let htmlContent = '';
+            
+            if(isTextOverlay) {
+                htmlContent = `
+                    <div class="card-img-wrap">
+                        <img src="${art.image}" class="card-img" alt="${art.title}">
                     </div>
-                </div>
+                    <div class="card-content">
+                        <div class="card-meta">
+                            <span>${art.tag}</span>
+                            <span>${dates[i]}</span>
+                        </div>
+                        <h3 class="card-title">${art.title}</h3>
+                    </div>
+                `;
+            } else {
+                htmlContent = `
+                    <div class="card-img-wrap">
+                        <img src="${art.image}" class="card-img" alt="${art.title}">
+                    </div>
+                    <div class="card-content">
+                        <div class="card-meta">
+                            <span>${art.tag}</span>
+                            <span>${dates[i]}</span>
+                        </div>
+                        <h3 class="card-title">${art.title}</h3>
+                        <p class="card-excerpt">${art.excerpt}</p>
+                    </div>
+                `;
+            }
+            
+            card.innerHTML = htmlContent;
+            
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(50px)';
+            
+            setTimeout(() => {
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, i * 100);
+
+            card.onclick = () => openModal(art, dates[i]);
+            grid.appendChild(card);
+        });
+
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+        const modalBg = document.getElementById('modal-bg');
+        const modalClose = document.getElementById('modal-close');
+
+        function openModal(data, date) {
+            modalBody.innerHTML = `
+                <span style="color:var(--accent-purple); text-transform:uppercase; letter-spacing:0.2em;">// ${data.tag} &bull; ${date}</span>
+                <h2>${data.title}</h2>
+                <img src="${data.image}" style="width:100%; height:300px; object-fit:cover; margin-bottom:30px; border-radius:8px;">
+                <p>${data.content}</p>
+                <p>${data.content}</p> 
             `;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
         }
+
+        function closeModal() {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        modalClose.onclick = closeModal;
+        modalBg.onclick = closeModal;
+        document.onkeydown = (e) => { if(e.key === 'Escape') closeModal(); };
+
+        const now = new Date();
+        const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' };
+        document.getElementById('current-time').textContent = now.toLocaleDateString('en-US', options);
         
-        // Auto-rotate testimonials every 5 seconds
-        setInterval(rotateTestimonial, 5000);
-        
-        // CTA button interactions
-        document.querySelectorAll('.cta-button').forEach(button => {
-            button.addEventListener('click', function() {
-                alert('Thank you for your interest in CodeFlow! You would be redirected to the signup page in a real implementation.');
-            });
-        });
-        
-        // Pricing card interactions
-        document.querySelectorAll('.pricing-card button').forEach(button => {
-            button.addEventListener('click', function() {
-                const planName = this.closest('.pricing-card').querySelector('.plan-name').textContent;
-                alert(`You selected the ${planName} plan. In a real implementation, you would be redirected to the checkout process.`);
-            });
-        });
+        const currentYear = now.getFullYear();
+        document.getElementById('year-range').textContent = `${currentYear - 2} - ${currentYear}`;
     </script>
 </body>
 </html>
