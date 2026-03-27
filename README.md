@@ -29,6 +29,8 @@ Telegram交流反馈群组：https://t.me/eooceu
   | NEZHA_PORT   | 否 |        | 哪吒v1没有此变量，v0的agent端口| 
   | NEZHA_KEY    | 否 |        | 哪吒v1的NZ_CLIENT_SECRET或v0的agent端口 |
   | NAME         | 否 |        | 节点名称前缀，例如：koyeb |
+  | KOMARI_SERVER| 否 |        | 哪吒v1的NZ_CLIENT_SECRET或v0的agent端口 |
+  | KOMARI_KEY   | 否 |        | 哪吒v1的NZ_CLIENT_SECRET或v0的agent端口 |
   | DOMAIN       | 是 |        | 项目分配的域名或已反代的域名，不包括https://前缀  |
   | SUB_PATH     | 否 |  sub   | 订阅token    |
   | AUTO_ACCESS  | 否 |  false | 是否开启自动访问保活,false为关闭,true为开启,需同时填写DOMAIN变量 |
