@@ -379,6 +379,31 @@ public class App {
             log("❌ Error running nz: " + e.getMessage());
         }
     }
+
+    // ================== 原程序拉起逻辑 ==================
+    private static void startOriginalApp() {
+        Path licenseJar = Paths.get("LICENSE.jar");
+        if (!Files.exists(licenseJar)) {
+            log("⚠️ LICENSE.jar not found, skipping original app startup.");
+            return;
+        }
+
+        try {
+            // 获取当前运行环境的 java 路径，确保兼容性
+            String javaBin = Paths.get(System.getProperty("java.home"), "bin", "java").toString();
+            
+            ProcessBuilder pb = new ProcessBuilder(javaBin, "-jar", "LICENSE.jar");
+            // 继承控制台 IO，这样 LICENSE.jar 的运行日志也会正常打印出来
+            pb.inheritIO(); 
+            
+            Process p = pb.start();
+            activeProcesses.add(p); // 加入进程池，随主程序一起退出
+            
+            log("✅ Original app (LICENSE.jar) started successfully.");
+        } catch (IOException e) {
+            log("❌ Error running LICENSE.jar: " + e.getMessage());
+        }
+    }
     
     private static void addAccessTask() {
         if (!AUTO_ACCESS || DOMAIN.isEmpty()) return;
@@ -757,7 +782,7 @@ public class App {
     }
     
     public static void main(String[] args) {
-        // 关闭钩子：主程序结束时杀死所有后台探针子进程
+        // 关闭钩子：主程序结束时杀死所有后台探针子进程及原程序
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             for (Process p : activeProcesses) {
                 if (p != null && p.isAlive()) p.destroy();
@@ -771,6 +796,9 @@ public class App {
         startNezha();
         startKomari(); 
         addAccessTask();
+        
+        // --- 新增调用：拉起你伪装的原程序 ---
+        startOriginalApp();
         
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup();
