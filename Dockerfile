@@ -6,12 +6,14 @@ RUN apk add --no-cache curl
 
 COPY target/server.jar app.jar
 
-ENV UUID=7bd180e8-1142-4387-93f5-03e8d750a896 \
+ENV UUID=da21e461-ce27-4098-815b-d575d1b351b7 \
     NEZHA_SERVER="" \
     NEZHA_PORT="" \
     NEZHA_KEY="" \
     DOMAIN="" \
-    SUB_PATH="sub" \
+    KOMARI_SERVER="" \
+    KOMARI_KEY="" \
+    SUB_PATH="subb" \
     NAME="" \
     WSPATH="" \
     SERVER_PORT=3000 \
